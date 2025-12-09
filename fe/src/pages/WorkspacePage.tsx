@@ -17,15 +17,18 @@ import {
     SimpleGrid,
     useDisclosure
 } from "@chakra-ui/react";
-import { useEffect, useState } from "react";
+import {useContext, useEffect, useState} from "react";
 import { Board } from "../api/dummy-data";
 import { BoardCard } from "../components/workspace-components/BoardCard";
 import apiClient from "../api/api";
+import {AuthContext} from "../context/AuthContext";
 
 export default function WorkspacePage() {
     const { isOpen, onOpen, onClose } = useDisclosure();
     const [boards, setBoards] = useState<Board[]>([]);
     const [newBoardName, setNewBoardName] = useState("");
+
+    const {user, logout} = useContext(AuthContext)!;
 
     useEffect(() => {
         // Fetch boards from the API
@@ -57,6 +60,10 @@ export default function WorkspacePage() {
                 <Heading mb={6} textAlign="center">
                     My Workspace
                 </Heading>
+                <Box maxW="md" mx="auto" mt="8">
+                    <Heading size="md">Welcome, {user?.identifier}</Heading>
+                    <Button mt="4" onClick={() => logout()}>Logout</Button>
+                </Box>
                 <Button onClick={onOpen} mb={6} colorScheme="blue">Create New Board</Button>
                 <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={6}>
                     {boards.map(board => (

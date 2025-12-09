@@ -11,4 +11,14 @@ const apiClient = axios.create({
     },
 });
 
+//This function adds the JWT token to the Authorization header of each request if it exists in localStorage
+apiClient.interceptors.request.use((config) => {
+    const token = localStorage.getItem("token");
+    if (token && config.headers) {
+        config.headers["Authorization"] = `Bearer ${token}`;
+    }
+    return config;
+});
+
+
 export default apiClient;

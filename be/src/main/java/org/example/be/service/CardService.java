@@ -24,6 +24,7 @@ public class CardService {
     private final KBListRepository kbListRepository;
     private final MemberRepository memberRepository;
     private final LabelRepository labelRepository;
+    private final BoardService boardService;
 
     public List<Card> findAllCards() {
         return cardRepository.findAll();
@@ -39,26 +40,38 @@ public class CardService {
     }
 
     @Transactional
-    public Card createCardInList(Card card, Long listId) {
+    public Card createCardInList(Card card, Long listId, Long userId) {
         KBList list = kbListRepository.findById(listId)
                 .orElseThrow(() -> new EntityNotFoundException("List not found with id: " + listId));
         card.setList(list);
-        // Set order to be the last in the list
-        int order = list.getCards() != null ? list.getCards().size() : 0;
-        card.setCardOrder(order);
+        //check if user is ADMIN
+        Long boardId = list.getBoard().getId();
+        boardService.requireAdmin(boardId, userId);
+        card.setList(list);
         return cardRepository.save(card);
     }
 
 
     @Transactional
-    public void deleteCard(Long id) {
+    public void deleteCard(Long id, Long userId) {
+        Card card = cardRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Card not found with id: " + id));
+        Long boardId = card.getList().getBoard().getId();
+        boardService.requireAdmin(boardId, userId);
+
         cardRepository.deleteById(id);
     }
 
     @Transactional
-    public Card moveCard(Long cardId, Long newListId, Integer newPosition) {
+    public Card moveCard(Long cardId, Long newListId, Integer newPosition, Long userId) {
         Card card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+
+        //ADMIN CHECK
+        Long boardId = card.getList().getBoard().getId();
+        boardService.requireAdmin(boardId, userId);
+
+        //create the new list object
         KBList newList = kbListRepository.findById(newListId)
                 .orElseThrow(() -> new EntityNotFoundException("List not found"));
 
@@ -70,9 +83,15 @@ public class CardService {
     }
 
     @Transactional
-    public Card assignMember(Long cardId, Long memberId) {
+    public Card assignMember(Long cardId, Long memberId, Long userId) {
         Card card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+
+        //ADMIN CHECK
+        Long boardId = card.getList().getBoard().getId();
+        boardService.requireAdmin(boardId, userId);
+
+        //MEMBER FETCH
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new EntityNotFoundException("Member not found"));
 
@@ -81,9 +100,15 @@ public class CardService {
     }
 
     @Transactional
-    public Card unassignMember(Long cardId, Long memberId) {
+    public Card unassignMember(Long cardId, Long memberId, Long userId) {
         Card card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+
+        //ADDMIN CHECK
+        Long boardId = card.getList().getBoard().getId();
+        boardService.requireAdmin(boardId, userId);
+
+        //MEMBER FETCH
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new EntityNotFoundException("Member not found"));
 
@@ -92,9 +117,15 @@ public class CardService {
     }
 
     @Transactional
-    public Card assignLabel(Long cardId, Long labelId) {
+    public Card assignLabel(Long cardId, Long labelId, Long userId) {
         Card card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+
+        //ADMIN CHECK
+        Long boardId = card.getList().getBoard().getId();
+        boardService.requireAdmin(boardId, userId);
+
+        //LABEL FETCH
         Label label = labelRepository.findById(labelId)
                 .orElseThrow(() -> new EntityNotFoundException("Label not found"));
 
@@ -103,9 +134,14 @@ public class CardService {
     }
 
     @Transactional
-    public Card unassignLabel(Long cardId, Long labelId) {
+    public Card unassignLabel(Long cardId, Long labelId, Long userId) {
         Card card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new EntityNotFoundException("Card not found"));
+
+        //ADMIN CHECK
+        Long boardId = card.getList().getBoard().getId();
+        boardService.requireAdmin(boardId, userId);
+
         Label label = labelRepository.findById(labelId)
                 .orElseThrow(() -> new EntityNotFoundException("Label not found"));
 
