@@ -2,8 +2,10 @@ package org.example.kanban.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.time.LocalDate;
 
-@Entity @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Entity
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Card {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -17,4 +19,9 @@ public class Card {
     private String description;
 
     private Integer position; // order inside column
+
+    private LocalDate dueDate;
+
+    @Enumerated(EnumType.STRING)
+    private Priority priority;
 }

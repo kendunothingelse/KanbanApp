@@ -1,10 +1,10 @@
 package org.example.kanban.controller;
 
-import lombok.RequiredArgsConstructor;
-import org.example.kanban.auth.dto.BoardDto;
+import org.example.kanban.auth.dto.*;
 import org.example.kanban.entity.User;
 import org.example.kanban.repository.UserRepository;
 import org.example.kanban.service.CardService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +21,16 @@ public class CardController {
     @PostMapping
     public Object create(@RequestBody BoardDto.CardCreateRequest req, @AuthenticationPrincipal UserDetails ud) {
         return cardService.create(req, current(ud));
+    }
+
+    @PutMapping
+    public Object update(@RequestBody CardDto.CardUpdateRequest req, @AuthenticationPrincipal UserDetails ud) {
+        return cardService.update(req, current(ud));
+    }
+
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable Long id, @AuthenticationPrincipal UserDetails ud) {
+        cardService.delete(id, current(ud));
     }
 
     @PostMapping("/move")

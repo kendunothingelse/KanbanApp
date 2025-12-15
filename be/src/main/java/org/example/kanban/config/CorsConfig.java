@@ -1,4 +1,4 @@
-package org.example.be.config;
+package org.example.kanban.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
