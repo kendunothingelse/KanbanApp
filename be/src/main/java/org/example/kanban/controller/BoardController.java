@@ -1,6 +1,7 @@
 package org.example.kanban.controller;
 
 import org.example.kanban.auth.dto.*;
+import org.example.kanban.entity.Board;
 import org.example.kanban.entity.User;
 import org.example.kanban.repository.UserRepository;
 import org.example.kanban.service.BoardService;
@@ -8,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/boards")
@@ -25,8 +28,13 @@ public class BoardController {
         return boardService.createBoard(req, current(ud));
     }
 
+    @DeleteMapping("/{id}")
+    public void deleteBoard(@PathVariable Long id, @AuthenticationPrincipal UserDetails ud) {
+        boardService.deleteBoard(id, current(ud));
+    }
+
     @GetMapping("/me")
-    public Object myBoards(@AuthenticationPrincipal UserDetails ud) {
+    public List<Board> myBoards(@AuthenticationPrincipal UserDetails ud) {
         return boardService.listBoardsForUser(current(ud));
     }
 

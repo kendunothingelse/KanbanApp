@@ -1,194 +1,390 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
-import api from "../api/api";
-import { Board, Card, Column, Member } from "../types";
+import React, {useEffect, useMemo, useState} from "react";
 import {
-    Box, Button, Flex, Heading, Input, Select, Stack, Text, useToast, Tag, HStack, Divider
+    Box, Button, Flex, Heading, Input, Modal, ModalBody, ModalCloseButton, ModalContent,
+    ModalFooter, ModalHeader, ModalOverlay, Stack, Text, useDisclosure, useToast, Tooltip, Avatar,
 } from "@chakra-ui/react";
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
+import {
+    DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent,
+    useDroppable, DragOverlay
+} from "@dnd-kit/core";
+import {
+    arrayMove, SortableContext, useSortable, verticalListSortingStrategy, defaultAnimateLayoutChanges,
+} from "@dnd-kit/sortable";
+import {CSS} from "@dnd-kit/utilities";
+import api from "../api";
+import {Card as CardType, Column as ColumnType} from "../types";
+import {useParams} from "react-router-dom";
+import InviteMemberModal from "../components/InviteMemberModal";
+import { useAuth } from "../auth/AuthContext";
+import {getAvatarColor, getAvatarColorDifferent} from "../utils/avatarColor";
 
-const SortableCard: React.FC<{ card: Card; children: React.ReactNode }> = ({ card, children }) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: card.id });
-    const style = { transform: CSS.Translate.toString(transform), transition };
-    return <Box ref={setNodeRef} style={style} {...attributes} {...listeners}>{children}</Box>;
+type CardProps = { card: CardType; onEdit: (c: CardType) => void; onDelete: (id: number) => void };
+const CardItem: React.FC<CardProps & { dragging?: boolean }> = ({card, onEdit, onDelete, dragging}) => {
+    const {attributes, listeners, setNodeRef, transform, transition, isDragging} = useSortable({
+        id: card.id,
+        data: {type: "card", columnId: card.column?.id ?? card.column},
+        animateLayoutChanges: (args) =>
+            defaultAnimateLayoutChanges({
+                ...args,
+                wasDragging: true, // luôn animate khi thay đổi
+            }),
+    });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition: transition || "transform 150ms ease, box-shadow 150ms ease, background 150ms ease",
+        boxShadow: (dragging || isDragging) ? "lg" : "sm",
+        opacity: (dragging || isDragging) ? 0.9 : 1,
+    };
+
+    return (
+        <Box
+            ref={setNodeRef}
+            style={style}
+            borderWidth="1px"
+            borderRadius="md"
+            p="3"
+            bg="white"
+            {...attributes}
+            {...listeners}
+        >
+            <Heading size="sm">{card.title}</Heading>
+            {card.description && <Text fontSize="sm">{card.description}</Text>}
+            <Flex mt="2" gap="2">
+                <Button size="xs" onClick={() => onEdit(card)}>Sửa</Button>
+                <Button size="xs" colorScheme="red" variant="outline" onClick={() => onDelete(card.id)}>Xóa</Button>
+            </Flex>
+        </Box>
+    );
 };
 
-export default function BoardPage() {
-    const { id } = useParams();
-    const boardId = Number(id);
-    const [board, setBoard] = useState<Board | null>(null);
-    const [columns, setColumns] = useState<Column[]>([]);
-    const [cards, setCards] = useState<Card[]>([]);
-    const [members, setMembers] = useState<Member[]>([]);
-    const [colName, setColName] = useState("");
-    const [cardTitle, setCardTitle] = useState("");
-    const [cardDesc, setCardDesc] = useState("");
-    const [priority, setPriority] = useState<"LOW"|"MEDIUM"|"HIGH">("MEDIUM");
-    const [due, setDue] = useState<Date | null>(null);
-    const [targetCol, setTargetCol] = useState<number | undefined>();
-    const [inviteUserId, setInviteUserId] = useState<number | undefined>();
-    const [inviteRole, setInviteRole] = useState<string>("MEMBER");
-    const toast = useToast();
+type ColumnDroppableProps = { columnId: number; children: React.ReactNode };
+const ColumnDroppable: React.FC<ColumnDroppableProps> = ({columnId, children}) => {
+    const {setNodeRef} = useDroppable({
+        id: `column-${columnId}`,
+        data: {type: "column", columnId},
+    });
+    return <Box ref={setNodeRef}>{children}</Box>;
+};
 
-    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+const BoardPage: React.FC = () => {
+    const {boardId} = useParams<{ boardId: string }>();
+    const toast = useToast();
+    const [columns, setColumns] = useState<ColumnType[]>([]);
+    const [cards, setCards] = useState<CardType[]>([]);
+    const [newColName, setNewColName] = useState("");
+    const [editingCard, setEditingCard] = useState<CardType | null>(null);
+    const cardModal = useDisclosure();
+    const [activeCard, setActiveCard] = useState<CardType | null>(null);
+    const { user } = useAuth();
+
+    const [members, setMembers] = useState<{ id: number; user: { username: string } }[]>([]);
+    const mainColor = getAvatarColor(user?.username); // cần import useAuth hoặc truyền username; ở đây dùng hook mới
+
+    const loadMembers = async () => {
+        try {
+            const res = await api.get(`/boards/${boardId}/members`);
+            setMembers(res.data);
+        } catch {
+            setMembers([]);
+        }
+    };
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {activationConstraint: {distance: 5}})
+    );
 
     const load = async () => {
-        const bres = await api.get("/boards/me");
-        const found = (bres.data as Board[]).find(b => b.id === boardId);
-        if (found) setBoard(found);
-
-        const colRes = await api.get(`/boards/${boardId}/columns`);
-        const cardRes = await api.get(`/boards/${boardId}/cards`);
-        const memRes = await api.get(`/boards/${boardId}/members`);
+        const [colRes, cardRes] = await Promise.all([
+            api.get(`/boards/${boardId}/columns`),
+            api.get(`/boards/${boardId}/cards`)
+        ]);
         setColumns(colRes.data);
         setCards(cardRes.data);
-        setMembers(memRes.data);
-        if (colRes.data?.length) setTargetCol(colRes.data[0].id);
+        await loadMembers();
+
     };
 
-    useEffect(() => { load(); }, [boardId]);
+    useEffect(() => {
+        load();
+    }, [boardId]);
 
-    const createCol = async () => {
+    const cardsByColumn = useMemo(() => {
+        const map: Record<number, CardType[]> = {};
+        columns.forEach(c => {
+            map[c.id] = [];
+        });
+        cards.forEach(c => {
+            const colId = c.column?.id ?? c.column;
+            if (!map[colId]) map[colId] = [];
+            map[colId].push(c);
+        });
+        Object.keys(map).forEach(k => map[Number(k)].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)));
+        return map;
+    }, [cards, columns]);
+
+    const addColumn = async () => {
+        if (!newColName) return;
         try {
-            await api.post("/columns", { boardId, name: colName, position: columns.length });
-            setColName("");
+            await api.post("/columns", {boardId: Number(boardId), name: newColName, position: columns.length});
+            setNewColName("");
             load();
-        } catch (e: any) { toast({ status: "error", title: e?.response?.data || e.message }); }
+        } catch (e: any) {
+            toast({status: "error", title: "Không tạo được cột", description: e?.response?.data || e.message});
+        }
     };
 
-    const createCard = async () => {
-        if (!targetCol) return;
-        try {
-            await api.post("/cards", {
-                columnId: targetCol,
-                title: cardTitle,
-                description: cardDesc,
-                position: cards.filter(c => c.column.id === targetCol).length,
-                dueDate: due ? due.toISOString().slice(0, 10) : null,
-                priority
-            });
-            setCardTitle(""); setCardDesc(""); setDue(null);
-            load();
-        } catch (e: any) { toast({ status: "error", title: e?.response?.data || e.message }); }
-    };
-
-    const onDragEnd = async (event: DragEndEvent) => {
-        const { active, over } = event;
-        if (!over) return;
-        const activeCard = cards.find(c => c.id === Number(active.id));
-        const overCard = cards.find(c => c.id === Number(over.id));
-        if (!activeCard || !overCard) return;
-
-        const sameColumn = activeCard.column.id === overCard.column.id;
-        const newCards = [...cards];
-        const idxFrom = newCards.findIndex(c => c.id === activeCard.id);
-        const idxTo = newCards.findIndex(c => c.id === overCard.id);
-        const moved = arrayMove(newCards, idxFrom, idxTo);
-
-        const targetColumnId = sameColumn ? activeCard.column.id : overCard.column.id;
-        let pos = 0;
-        moved.filter(c => c.column.id === targetColumnId)
-            .forEach(c => c.position = pos++);
-
-        setCards(moved);
-        await api.post("/cards/move", {
-            cardId: activeCard.id,
-            targetColumnId,
-            targetPosition: overCard.position
-        }).catch(e => toast({ status: "error", title: e?.response?.data || e.message }));
+    const deleteColumn = async (id: number) => {
+        await api.delete(`/columns/${id}`);
         load();
     };
 
-    const invite = async () => {
-        if (!inviteUserId) return;
+    const saveCard = async (card: Partial<CardType> & { columnId: number }) => {
         try {
-            await api.post("/boards/invite", { boardId, userId: inviteUserId, role: inviteRole });
+            if (card.id) {
+                await api.put("/cards", {
+                    id: card.id,
+                    title: card.title,
+                    description: card.description,
+                    position: card.position,
+                    dueDate: card.dueDate,
+                    priority: card.priority,
+                });
+            } else {
+                await api.post("/cards", {
+                    columnId: card.columnId,
+                    title: card.title,
+                    description: card.description,
+                    position: cardsByColumn[card.columnId]?.length || 0,
+                    dueDate: card.dueDate,
+                    priority: card.priority,
+                });
+            }
+            cardModal.onClose();
+            setEditingCard(null);
             load();
-        } catch (e: any) { toast({ status: "error", title: e?.response?.data || e.message }); }
+        } catch (e: any) {
+            toast({status: "error", title: "Lỗi lưu thẻ", description: e?.response?.data || e.message});
+        }
     };
 
-    const cardsByColumn = useMemo(() => {
-        const map: Record<number, Card[]> = {};
-        cards.forEach(c => {
-            const colId = c.column.id;
-            map[colId] = map[colId] || [];
-            map[colId].push(c);
-        });
-        Object.values(map).forEach(arr => arr.sort((a, b) => a.position - b.position));
-        return map;
-    }, [cards]);
+    const deleteCard = async (id: number) => {
+        await api.delete(`/cards/${id}`);
+        load();
+    };
 
+    const handleDragStart = (event: DragStartEvent) => {
+        const id = Number(event.active.id);
+        const found = cards.find(c => c.id === id) || null;
+        setActiveCard(found);
+    };
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const {active, over} = event;
+        setActiveCard(null);
+        if (!over) return;
+
+        const activeId = Number(active.id);
+        const sourceCard = cards.find(c => c.id === activeId);
+        if (!sourceCard) return;
+
+        const sourceColId = sourceCard.column?.id ?? sourceCard.column;
+        let targetColId = sourceColId;
+        let targetIndex = 0;
+
+        const overData = over.data?.current as any;
+        if (overData?.type === "card") {
+            targetColId = overData.columnId;
+            const colCards = cardsByColumn[targetColId] || [];
+            const overIndex = colCards.findIndex(c => c.id === Number(over.id));
+            targetIndex = overIndex >= 0 ? overIndex : colCards.length;
+        } else if (overData?.type === "column") {
+            targetColId = overData.columnId;
+            const colCards = cardsByColumn[targetColId] || [];
+            targetIndex = colCards.length;
+        }
+
+        if (targetColId === sourceColId) {
+            const colCards = cardsByColumn[sourceColId] || [];
+            const oldIndex = colCards.findIndex(c => c.id === activeId);
+            if (oldIndex === targetIndex) return;
+        }
+
+        try {
+            await api.post("/cards/move", {
+                cardId: activeId,
+                targetColumnId: targetColId,
+                targetPosition: targetIndex,
+            });
+            load();
+        } catch (e: any) {
+            toast({status: "error", title: "Di chuyển thất bại", description: e?.response?.data || e.message});
+        }
+    };
+
+    const inviteModal = useDisclosure();
+    const renderMembers = () => {
+        if (!members.length) return null;
+        const firstTwo = members.slice(0, 2);
+        const extra = members.length - firstTwo.length;
+        return (
+            <Flex align="center" gap="1" mr="3">
+                {firstTwo.map(m => (
+                    <Tooltip key={m.id} label={m.user.username} hasArrow>
+                        <Avatar
+                            size="sm"
+                            name={m.user.username}
+                            bg={getAvatarColorDifferent(m.user.username, mainColor)}
+                            color="white"
+                        />
+                    </Tooltip>
+                ))}
+                {extra > 0 && (
+                    <Tooltip label={members.slice(2).map(m => m.user.username).join(", ")} hasArrow>
+                        <Text fontSize="sm" color="gray.600">và còn +{extra} người khác</Text>
+                    </Tooltip>
+                )}
+            </Flex>
+        );
+    };
     return (
-        <Box p="6">
-            <Heading size="lg" mb="4">{board?.name || `Board #${boardId}`}</Heading>
-
-            <HStack align="start" spacing="6" mb="6">
-                <Box borderWidth="1px" p="4" rounded="md" minW="250px">
-                    <Text fontWeight="bold" mb="2">Invite member (ADMIN)</Text>
-                    <Input placeholder="User ID" type="number" value={inviteUserId || ""} onChange={e => setInviteUserId(Number(e.target.value))} mb="2" />
-                    <Select value={inviteRole} onChange={e => setInviteRole(e.target.value)} mb="2">
-                        <option>ADMIN</option><option>MEMBER</option><option>VIEWER</option>
-                    </Select>
-                    <Button onClick={invite}>Invite</Button>
-                    <Divider my="3" />
-                    <Text fontWeight="bold">Members</Text>
-                    {members.map((m, i) => (
-                        <Box key={i} p="2" borderWidth="1px" rounded="md" mt="2">
-                            {m.user?.username} - <Tag>{m.role}</Tag>
-                        </Box>
-                    ))}
-                </Box>
-
-                <Box borderWidth="1px" p="4" rounded="md" minW="240px">
-                    <Text fontWeight="bold" mb="2">Create Column</Text>
-                    <Input placeholder="Column name" value={colName} onChange={e => setColName(e.target.value)} mb="2" />
-                    <Button onClick={createCol}>Add Column</Button>
-                </Box>
-
-                <Box borderWidth="1px" p="4" rounded="md" minW="260px">
-                    <Text fontWeight="bold" mb="2">Create Card</Text>
-                    <Select value={targetCol} onChange={e => setTargetCol(Number(e.target.value))} mb="2">
-                        {columns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </Select>
-                    <Input placeholder="Title" value={cardTitle} onChange={e => setCardTitle(e.target.value)} mb="2" />
-                    <Input placeholder="Description" value={cardDesc} onChange={e => setCardDesc(e.target.value)} mb="2" />
-                    <Select value={priority} onChange={e => setPriority(e.target.value as any)} mb="2">
-                        <option>LOW</option><option>MEDIUM</option><option>HIGH</option>
-                    </Select>
-                    <Box mb="2">
-                        <DatePicker selected={due} onChange={d => setDue(d)} placeholderText="Due date" />
-                    </Box>
-                    <Button onClick={createCard}>Add Card</Button>
-                </Box>
-            </HStack>
-
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-                <Flex align="start" gap="4" overflowX="auto">
-                    {columns.sort((a, b) => a.position - b.position).map(col => (
-                        <Box key={col.id} minW="260px" borderWidth="1px" p="3" rounded="md" bg="gray.50">
-                            <Heading size="sm" mb="2">{col.name}</Heading>
-                            <SortableContext items={(cardsByColumn[col.id] || []).map(c => c.id)} strategy={verticalListSortingStrategy}>
-                                <Stack spacing="2">
-                                    {(cardsByColumn[col.id] || []).map(card => (
-                                        <SortableCard key={card.id} card={card}>
-                                            <Box p="3" bg="white" shadow="sm" borderWidth="1px" rounded="md">
-                                                <Text fontWeight="bold">{card.title}</Text>
-                                                <Text fontSize="sm" noOfLines={2}>{card.description}</Text>
-                                                {card.dueDate && <Tag mt="1" colorScheme="blue">Due: {card.dueDate}</Tag>}
-                                                {card.priority && <Tag mt="1" colorScheme="purple">P: {card.priority}</Tag>}
-                                            </Box>
-                                        </SortableCard>
-                                    ))}
-                                </Stack>
-                            </SortableContext>
-                        </Box>
-                    ))}
+        <Box p="6" bg="gray.50" minH="100vh">
+            <Flex justify="space-between" align="center" mb="4">
+                {/*Header*/}
+                <Heading size="lg">Board #{boardId}</Heading>
+                <Flex align="center" gap="2">
+                    {renderMembers()}
                 </Flex>
-            </DndContext>
+                <Flex gap="2">
+                    <Button onClick={() => inviteModal.onOpen()}>Mời thành viên</Button>
+                    <Input placeholder="Tên cột mới" value={newColName} onChange={(e) => setNewColName(e.target.value)}
+                           width="200px"/>
+                    <Button onClick={addColumn}>Thêm cột</Button>
+                </Flex>
+
+            </Flex>
+
+            <Flex gap="4" align="flex-start" overflowX="auto">
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                >
+                    {columns.map(col => (
+                        <Box key={col.id} minW="260px" bg="gray.100" p="3" borderRadius="md">
+                            <Flex justify="space-between" mb="2">
+                                <Heading size="sm">{col.name}</Heading>
+                                <Button size="xs" variant="ghost" colorScheme="red"
+                                        onClick={() => deleteColumn(col.id)}>X</Button>
+                            </Flex>
+                            <Button size="xs" mb="2" onClick={() => {
+                                setEditingCard({} as CardType);
+                                cardModal.onOpen();
+                            }}>
+                                + Thêm task
+                            </Button>
+
+                            <ColumnDroppable columnId={col.id}>
+                                <SortableContext
+                                    items={(cardsByColumn[col.id] || []).map(c => c.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    <Stack spacing="2">
+                                        {(cardsByColumn[col.id] || []).map(c => (
+                                            <CardItem
+                                                key={c.id}
+                                                card={c}
+                                                onEdit={(c) => {
+                                                    setEditingCard(c);
+                                                    cardModal.onOpen();
+                                                }}
+                                                onDelete={deleteCard}
+                                            />
+                                        ))}
+                                    </Stack>
+                                </SortableContext>
+                            </ColumnDroppable>
+                        </Box>
+                    ))}
+
+                    {/* Drag overlay for smoother visual feedback */}
+                    <DragOverlay dropAnimation={{
+                        duration: 180,
+                        easing: "cubic-bezier(0.25, 1, 0.5, 1)"
+                    }}>
+                        {activeCard ? (
+                            <CardItem
+                                card={activeCard}
+                                onEdit={() => {
+                                }}
+                                onDelete={() => {
+                                }}
+                                dragging
+                            />
+                        ) : null}
+                    </DragOverlay>
+                </DndContext>
+            </Flex>
+
+            <Modal isOpen={cardModal.isOpen} onClose={() => {
+                cardModal.onClose();
+                setEditingCard(null);
+            }}>
+                <ModalOverlay/>
+                <ModalContent>
+                    <ModalHeader>{editingCard?.id ? "Sửa task" : "Thêm task"}</ModalHeader>
+                    <ModalCloseButton/>
+                    <ModalBody>
+                        <Stack spacing="3">
+                            <Input
+                                placeholder="Tiêu đề"
+                                value={editingCard?.title ?? ""}
+                                onChange={(e) => setEditingCard(prev => ({
+                                    ...(prev || {} as any),
+                                    title: e.target.value
+                                }))}
+                            />
+                            <Input
+                                placeholder="Mô tả"
+                                value={editingCard?.description ?? ""}
+                                onChange={(e) => setEditingCard(prev => ({
+                                    ...(prev || {} as any),
+                                    description: e.target.value
+                                }))}
+                            />
+                        </Stack>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button mr={3} variant="ghost" onClick={cardModal.onClose}>Hủy</Button>
+                        <Button
+                            colorScheme="blue"
+                            onClick={() => {
+                                if (!editingCard?.title) {
+                                    toast({status: "warning", title: "Nhập tiêu đề"});
+                                    return;
+                                }
+                                const colId = editingCard?.column?.id ?? columns[0]?.id;
+                                if (!colId) {
+                                    toast({status: "error", title: "Chưa có cột"});
+                                    return;
+                                }
+                                saveCard({...editingCard, columnId: colId});
+                            }}
+                        >
+                            Lưu
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+            <InviteMemberModal
+                isOpen={inviteModal.isOpen}
+                onClose={inviteModal.onClose}
+                boardId={Number(boardId)}
+                onInvited={loadMembers}
+            />
         </Box>
     );
-}
+};
+
+export default BoardPage;

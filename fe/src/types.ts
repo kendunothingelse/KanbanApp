@@ -1,17 +1,39 @@
-export type Workspace = { id: number; name: string };
+export interface User {
+    id: number;
+    username: string;
+}
 
-export type Board = { id: number; name: string; workspace?: Workspace };
+export interface Workspace {
+    id: number;
+    name: string;
+}
 
-export type Column = { id: number; name: string; position: number; board?: Board };
+export interface Board {
+    id: number;
+    name: string;
+    workspace: Workspace;
+}
 
-export type Card = {
+export interface Column {
+    id: number;
+    name: string;
+    position: number;
+    board: Board;
+}
+
+export interface Card {
     id: number;
     title: string;
     description?: string;
     position: number;
-    column: Column;
     dueDate?: string;
-    priority?: "LOW" | "MEDIUM" | "HIGH";
-};
+    priority?: 'LOW' | 'MEDIUM' | 'HIGH';
+    column: Column;
+}
 
-export type Member = { user: { id: number; username: string }; role: "ADMIN" | "MEMBER" | "VIEWER" };
+export interface BoardMember {
+    id: number;
+    user: User;
+    board: Board;
+    role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+}

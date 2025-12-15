@@ -16,7 +16,9 @@ public class ColumnController {
     private final ColumnService columnService;
     private final UserRepository userRepo;
 
-    private User current(UserDetails ud) { return userRepo.findByUsername(ud.getUsername()).orElseThrow(); }
+    private User current(UserDetails ud) {
+        return userRepo.findByUsername(ud.getUsername()).orElseThrow();
+    }
 
     @PostMapping
     public Object create(@RequestBody BoardDto.ColumnCreateRequest req, @AuthenticationPrincipal UserDetails ud) {

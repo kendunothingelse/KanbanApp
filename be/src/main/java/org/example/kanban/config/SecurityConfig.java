@@ -27,7 +27,6 @@ public class SecurityConfig {
 
     private final JwtService jwtService;
     private final UserDetailsServiceImpl userDetailsService;
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -36,6 +35,10 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers("/columns/**").authenticated()
+                        .requestMatchers("/cards/**").authenticated()
+                        .requestMatchers("/workspaces/**").authenticated()
+                        .requestMatchers("/boards/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(new JwtAuthFilter(jwtService, userDetailsService), BasicAuthenticationFilter.class)
@@ -75,12 +78,21 @@ public class SecurityConfig {
                 try {
                     String token = auth.substring(7);
                     String username = jwtService.extractUsername(token);
-                    var userDetails = uds.loadUserByUsername(username);
-                    var authToken = new UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities());
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                    // Add token validation
+                    if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                        var userDetails = uds.loadUserByUsername(username);
+
+                        // Validate token before setting authentication
+                        if (jwtService.validateToken(token, username)) {
+                            var authToken = new UsernamePasswordAuthenticationToken(
+                                    userDetails, null, userDetails.getAuthorities());
+                            SecurityContextHolder.getContext().setAuthentication(authToken);
+                        }
+                    }
                 } catch (Exception e) {
-                    // nếu token lỗi, bỏ qua để trả 401
+                    // Log the error for debugging
+                    System.err.println("JWT validation failed: " + e.getMessage());
                 }
             }
             chain.doFilter(request, response);

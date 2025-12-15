@@ -6,10 +6,7 @@ import org.example.kanban.entity.Board;
 import org.example.kanban.entity.BoardMember;
 import org.example.kanban.entity.Role;
 import org.example.kanban.entity.User;
-import org.example.kanban.repository.BoardMemberRepository;
-import org.example.kanban.repository.BoardRepository;
-import org.example.kanban.repository.UserRepository;
-import org.example.kanban.repository.WorkspaceRepository;
+import org.example.kanban.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +20,9 @@ public class BoardService {
     private final BoardMemberRepository boardMemberRepo;
     private final PermissionService permissionService;
     private final UserRepository userRepo;
+    private final ColumnRepository columnRepo;
+    private final CardRepository cardRepo;
+    private final CardAssigneeRepository cardAssigneeRepo;
 
     @Transactional
     public Board createBoard(BoardDto.BoardCreateRequest req, User current) {
@@ -34,6 +34,28 @@ public class BoardService {
         boardMemberRepo.save(BoardMember.builder()
                 .board(b).user(current).role(Role.ADMIN).build());
         return b;
+    }
+
+    @Transactional
+    public void deleteBoard(Long boardId, User current) {
+        Board board = boardRepo.findById(boardId)
+                .orElseThrow(() -> new RuntimeException("Board not found"));
+        permissionService.checkManageMember(current, board);
+
+        // Xóa assignee + card + column + member trước để tránh lỗi ràng buộc
+        var columns = columnRepo.findByBoardOrderByPositionAsc(board);
+        for (var col : columns) {
+            var cards = cardRepo.findByColumnOrderByPositionAsc(col);
+            for (var card : cards) {
+                var assignees = cardAssigneeRepo.findByCard(card);
+                cardAssigneeRepo.deleteAll(assignees);
+                cardRepo.delete(card);
+            }
+            columnRepo.delete(col);
+        }
+        var members = boardMemberRepo.findByBoard(board);
+        boardMemberRepo.deleteAll(members);
+        boardRepo.delete(board);
     }
 
     public List<Board> listBoardsForUser(User current) {
