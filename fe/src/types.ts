@@ -26,6 +26,7 @@ export interface Card {
     title: string;
     description?: string;
     position: number;
+    createdAt?: string;
     dueDate?: string;
     priority?: 'LOW' | 'MEDIUM' | 'HIGH';
     column: Column;

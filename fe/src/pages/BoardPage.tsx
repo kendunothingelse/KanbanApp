@@ -1,7 +1,7 @@
 import React, {useEffect, useMemo, useState} from "react";
 import {
     Box, Button, Flex, Heading, Input, Modal, ModalBody, ModalCloseButton, ModalContent,
-    ModalFooter, ModalHeader, ModalOverlay, Stack, Text, useDisclosure, useToast, Tooltip, Avatar,
+    ModalFooter, ModalHeader, ModalOverlay, Stack, Text, useDisclosure, useToast, Tooltip, Avatar, Select,
 } from "@chakra-ui/react";
 import {
     DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent,
@@ -15,10 +15,11 @@ import api from "../api";
 import {Card as CardType, Column as ColumnType} from "../types";
 import {useParams} from "react-router-dom";
 import InviteMemberModal from "../components/InviteMemberModal";
-import { useAuth } from "../auth/AuthContext";
+import {useAuth} from "../auth/AuthContext";
 import {getAvatarColor, getAvatarColorDifferent} from "../utils/avatarColor";
 
 type CardProps = { card: CardType; onEdit: (c: CardType) => void; onDelete: (id: number) => void };
+
 const CardItem: React.FC<CardProps & { dragging?: boolean }> = ({card, onEdit, onDelete, dragging}) => {
     const {attributes, listeners, setNodeRef, transform, transition, isDragging} = useSortable({
         id: card.id,
@@ -38,18 +39,17 @@ const CardItem: React.FC<CardProps & { dragging?: boolean }> = ({card, onEdit, o
     };
 
     return (
-        <Box
-            ref={setNodeRef}
-            style={style}
-            borderWidth="1px"
-            borderRadius="md"
-            p="3"
-            bg="white"
-            {...attributes}
-            {...listeners}
-        >
+        <Box ref={setNodeRef}
+             style={style}
+             borderWidth="1px" borderRadius="md" p="3"
+             bg="white" {...attributes} {...listeners}>
             <Heading size="sm">{card.title}</Heading>
             {card.description && <Text fontSize="sm">{card.description}</Text>}
+            <Stack spacing="1" mt="2" fontSize="xs" color="gray.600">
+                {card.priority && <Text>Priority: {card.priority}</Text>}
+                {card.dueDate && <Text>Deadline: {card.dueDate}</Text>}
+                {card.createdAt && <Text>Created at: {card.createdAt.slice(0, 10)}</Text>}
+            </Stack>
             <Flex mt="2" gap="2">
                 <Button size="xs" onClick={() => onEdit(card)}>Sửa</Button>
                 <Button size="xs" colorScheme="red" variant="outline" onClick={() => onDelete(card.id)}>Xóa</Button>
@@ -73,10 +73,14 @@ const BoardPage: React.FC = () => {
     const [columns, setColumns] = useState<ColumnType[]>([]);
     const [cards, setCards] = useState<CardType[]>([]);
     const [newColName, setNewColName] = useState("");
+
     const [editingCard, setEditingCard] = useState<CardType | null>(null);
+    const [dueDateInput, setDueDateInput] = useState<string>("");
+    const [priorityInput, setPriorityInput] = useState<string>("");
+
     const cardModal = useDisclosure();
     const [activeCard, setActiveCard] = useState<CardType | null>(null);
-    const { user } = useAuth();
+    const {user} = useAuth();
 
     const [members, setMembers] = useState<{ id: number; user: { username: string } }[]>([]);
     const mainColor = getAvatarColor(user?.username); // cần import useAuth hoặc truyền username; ở đây dùng hook mới
@@ -89,6 +93,7 @@ const BoardPage: React.FC = () => {
             setMembers([]);
         }
     };
+
 
     const sensors = useSensors(
         useSensor(PointerSensor, {activationConstraint: {distance: 5}})
@@ -104,6 +109,16 @@ const BoardPage: React.FC = () => {
         await loadMembers();
 
     };
+
+    useEffect(() => {
+        if (editingCard) {
+            setDueDateInput(editingCard.dueDate ?? "");
+            setPriorityInput(editingCard.priority ?? "");
+        } else {
+            setDueDateInput("");
+            setPriorityInput("");
+        }
+    }, [editingCard]);
 
     useEffect(() => {
         load();
@@ -147,8 +162,8 @@ const BoardPage: React.FC = () => {
                     title: card.title,
                     description: card.description,
                     position: card.position,
-                    dueDate: card.dueDate,
-                    priority: card.priority,
+                    dueDate: dueDateInput || null,
+                    priority: priorityInput || null,
                 });
             } else {
                 await api.post("/cards", {
@@ -156,8 +171,8 @@ const BoardPage: React.FC = () => {
                     title: card.title,
                     description: card.description,
                     position: cardsByColumn[card.columnId]?.length || 0,
-                    dueDate: card.dueDate,
-                    priority: card.priority,
+                    dueDate: dueDateInput || null,
+                    priority: priorityInput || null,
                 });
             }
             cardModal.onClose();
@@ -167,7 +182,6 @@ const BoardPage: React.FC = () => {
             toast({status: "error", title: "Lỗi lưu thẻ", description: e?.response?.data || e.message});
         }
     };
-
     const deleteCard = async (id: number) => {
         await api.delete(`/cards/${id}`);
         load();
@@ -353,10 +367,29 @@ const BoardPage: React.FC = () => {
                                     description: e.target.value
                                 }))}
                             />
-                        </Stack>
-                    </ModalBody>
+                            <Input
+                                type="date"
+                                placeholder="Deadline"
+                                value={dueDateInput}
+                                onChange={(e) => setDueDateInput(e.target.value)}
+                            />
+                            <Select
+                                placeholder="Ưu tiên"
+                                value={priorityInput}
+                                onChange={(e) => setPriorityInput(e.target.value)}
+                            >
+                                <option value="LOW">LOW</option>
+                                <option value="MEDIUM">MEDIUM</option>
+                                <option value="HIGH">HIGH</option>
+                            </Select>
+                            {editingCard?.createdAt && (
+                                <Text fontSize="sm" color="gray.500">Ngày
+                                    tạo: {editingCard.createdAt.slice(0, 10)}</Text>
+                            )}
+                        </Stack> </ModalBody>
                     <ModalFooter>
-                        <Button mr={3} variant="ghost" onClick={cardModal.onClose}>Hủy</Button>
+                        <Button mr={3} variant="ghost"
+                                onClick={cardModal.onClose}>Hủy</Button>
                         <Button
                             colorScheme="blue"
                             onClick={() => {
