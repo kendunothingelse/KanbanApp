@@ -5,7 +5,7 @@ import {
 import { useParams } from "react-router-dom";
 import { DndContext, DragEndEvent, DragOverlay, closestCorners } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import client from "../../api/client";
+import api from "../../api/api";
 import { endpoints } from "../../api/endpoints";
 import { Board, Column as ColumnType, Card as CardType, User } from "../../types";
 import Layout from "../../components/Layout";
@@ -33,10 +33,10 @@ const BoardDetailPage: React.FC = () => {
     const fetchData = async () => {
         // Giả định backend có các endpoint GET; nếu chưa có bạn cần bổ sung.
         const [boardRes, columnsRes, cardsRes, usersRes] = await Promise.all([
-            client.get(`/boards/${boardId}`), // cần bổ sung backend GET board detail
-            client.get(`/boards/${boardId}/columns`), // cần bổ sung backend list columns by board
-            client.get(`/boards/${boardId}/cards`),    // cần bổ sung backend list cards by board
-            client.get(`/users`), // hoặc một endpoint list user, tùy bạn triển khai
+            api.get(`/boards/${boardId}`), // cần bổ sung backend GET board detail
+            api.get(`/boards/${boardId}/columns`), // cần bổ sung backend list columns by board
+            api.get(`/boards/${boardId}/cards`),    // cần bổ sung backend list cards by board
+            api.get(`/users`), // hoặc một endpoint list user, tùy bạn triển khai
         ]);
         setState({
             board: boardRes.data,
@@ -66,7 +66,7 @@ const BoardDetailPage: React.FC = () => {
 
     const createColumn = async () => {
         if (!colName) return;
-        await client.post(endpoints.columns.create, {
+        await api.post(endpoints.columns.create, {
             boardId: Number(boardId),
             name: colName,
             position: state.columns.length,
@@ -77,7 +77,7 @@ const BoardDetailPage: React.FC = () => {
 
     const createCard = async () => {
         if (!cardTitle || !selectedColumn) return;
-        await client.post(endpoints.cards.create, {
+        await api.post(endpoints.cards.create, {
             columnId: selectedColumn,
             title: cardTitle,
             description: cardDesc,
@@ -90,7 +90,7 @@ const BoardDetailPage: React.FC = () => {
 
     const assignCard = async () => {
         if (!selectedCard || !selectedUser) return;
-        await client.post(endpoints.cards.assign, {
+        await api.post(endpoints.cards.assign, {
             cardId: selectedCard,
             userId: selectedUser,
         });
@@ -105,7 +105,7 @@ const BoardDetailPage: React.FC = () => {
         const targetColumnId = overColumnId;
 
         const targetPosition = (cardsByColumn[targetColumnId]?.length ?? 0);
-        await client.post(endpoints.cards.move, {
+        await api.post(endpoints.cards.move, {
             cardId,
             targetColumnId,
             targetPosition,

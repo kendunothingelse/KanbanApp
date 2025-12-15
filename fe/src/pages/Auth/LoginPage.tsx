@@ -1,32 +1,46 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { Box, Button, Input, Stack, Heading, Text } from "@chakra-ui/react";
 import { useAuth } from "../../auth/AuthContext";
+import { Box, Button, Heading, Input, Stack, Tabs, TabList, TabPanels, Tab, TabPanel, useToast } from "@chakra-ui/react";
+import { useNavigate } from "react-router-dom";
 
-const LoginPage: React.FC = () => {
-    const { login } = useAuth();
+export default function LoginPage() {
+    const { login, register } = useAuth();
+    const [u, setU] = useState("");
+    const [p, setP] = useState("");
+    const toast = useToast();
     const nav = useNavigate();
-    const [username, setUsername] = useState("");
-    const [password, setPassword] = useState("");
 
-    const onSubmit = async () => {
-        await login(username, password);
-        nav("/boards");
+    const submit = async (fn: (u: string, p: string) => Promise<void>) => {
+        try {
+            await fn(u, p);
+            nav("/");
+        } catch (e: any) {
+            toast({ status: "error", title: e?.response?.data || e.message });
+        }
     };
 
     return (
-        <Box maxW="md" mx="auto" mt={20} p={6} borderWidth="1px" borderRadius="lg">
-            <Heading mb={4}>Login</Heading>
-            <Stack spacing={3}>
-                <Input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
-                <Input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-                <Button colorScheme="blue" onClick={onSubmit}>Login</Button>
-                <Text>
-                    No account? <Link to="/register">Register</Link>
-                </Text>
-            </Stack>
+        <Box maxW="md" mx="auto" mt="20">
+            <Heading mb="4">Kanban Login / Register</Heading>
+            <Tabs>
+                <TabList><Tab>Login</Tab><Tab>Register</Tab></TabList>
+                <TabPanels>
+                    <TabPanel>
+                        <Stack>
+                            <Input placeholder="username" value={u} onChange={e => setU(e.target.value)} />
+                            <Input placeholder="password" type="password" value={p} onChange={e => setP(e.target.value)} />
+                            <Button onClick={() => submit(login)}>Login</Button>
+                        </Stack>
+                    </TabPanel>
+                    <TabPanel>
+                        <Stack>
+                            <Input placeholder="username" value={u} onChange={e => setU(e.target.value)} />
+                            <Input placeholder="password" type="password" value={p} onChange={e => setP(e.target.value)} />
+                            <Button onClick={() => submit(register)}>Register</Button>
+                        </Stack>
+                    </TabPanel>
+                </TabPanels>
+            </Tabs>
         </Box>
     );
-};
-
-export default LoginPage;
+}

@@ -1,64 +1,54 @@
 import React, { useEffect, useState } from "react";
-import { Box, Button, Heading, Input, Stack, SimpleGrid, Card as CCard, CardBody, Text, Select } from "@chakra-ui/react";
-import client from "../../api/client";
-import { endpoints } from "../../api/endpoints";
+import api from "../../api/api";
 import { Board, Workspace } from "../../types";
-import Layout from "../../components/Layout";
+import { Box, Button, Flex, Heading, Input, List, ListItem, useToast, Select } from "@chakra-ui/react";
+import { useNavigate } from "react-router-dom";
 
-const BoardListPage: React.FC = () => {
+export default function BoardListPage() {
     const [boards, setBoards] = useState<Board[]>([]);
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [name, setName] = useState("");
-    const [workspaceId, setWorkspaceId] = useState<number | undefined>();
+    const [wsId, setWsId] = useState<number | undefined>();
+    const toast = useToast();
+    const nav = useNavigate();
 
-    const fetchBoards = async () => {
-        const res = await client.get(endpoints.boards.list);
+    const load = async () => {
+        const res = await api.get("/boards/me");
         setBoards(res.data);
+        const ws = await api.get("/workspaces");
+        setWorkspaces(ws.data);
+        if (ws.data?.length) setWsId(ws.data[0].id);
     };
+    useEffect(() => { load(); }, []);
 
-    const fetchWorkspaces = async () => {
-        const res = await client.get(endpoints.workspace.list);
-        setWorkspaces(res.data);
-        if (res.data?.length) setWorkspaceId(res.data[0].id);
-    };
-
-    useEffect(() => {
-        fetchBoards();
-        fetchWorkspaces();
-    }, []);
-
-    const createBoard = async () => {
-        if (!workspaceId) return;
-        await client.post(endpoints.boards.create, { name, workspaceId });
-        setName("");
-        fetchBoards();
+    const create = async () => {
+        try {
+            await api.post("/boards", { name, workspaceId: wsId });
+            setName("");
+            await load();
+        } catch (e: any) {
+            toast({ status: "error", title: e?.response?.data || e.message });
+        }
     };
 
     return (
-        <Layout>
-            <Heading mb={4}>Boards</Heading>
-            <Stack direction="row" spacing={3} mb={4}>
-                <Input placeholder="Board name" value={name} onChange={(e) => setName(e.target.value)} />
-                <Select value={workspaceId} onChange={(e) => setWorkspaceId(Number(e.target.value))}>
-                    {workspaces.map((w) => (
-                        <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
+        <Box p="6">
+            <Heading size="lg" mb="4">My Boards</Heading>
+            <Flex gap="2" mb="4">
+                <Input placeholder="Board name" value={name} onChange={e => setName(e.target.value)} />
+                <Select value={wsId} onChange={e => setWsId(Number(e.target.value))}>
+                    {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </Select>
-                <Button colorScheme="blue" onClick={createBoard}>Create</Button>
-            </Stack>
-
-            <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                {boards.map((b) => (
-                    <CCard as="a" href={`/boards/${b.id}`} key={b.id} _hover={{ shadow: "md" }}>
-                        <CardBody>
-                            <Heading size="md">{b.name}</Heading>
-                            <Text fontSize="sm" color="gray.500">Workspace: {b.workspace?.name ?? b.workspace?.id}</Text>
-                        </CardBody>
-                    </CCard>
+                <Button onClick={create}>Create</Button>
+            </Flex>
+            <List spacing="2">
+                {boards.map(b => (
+                    <ListItem key={b.id} p="3" borderWidth="1px" borderRadius="md" cursor="pointer"
+                              onClick={() => nav(`/boards/${b.id}`)}>
+                        <Flex justify="space-between"><Box>{b.name}</Box><Box>{b.workspace?.name}</Box></Flex>
+                    </ListItem>
                 ))}
-            </SimpleGrid>
-        </Layout>
+            </List>
+        </Box>
     );
-};
-
-export default BoardListPage;
+}

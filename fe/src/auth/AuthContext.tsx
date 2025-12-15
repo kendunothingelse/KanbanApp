@@ -1,52 +1,38 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import client from "../api/client";
-import { endpoints } from "../api/endpoints";
+import api, { setToken } from "../api/api";
 
 type AuthContextType = {
-    token: string | null;
+    token?: string;
     login: (u: string, p: string) => Promise<void>;
     register: (u: string, p: string) => Promise<void>;
     logout: () => void;
-    isAuthenticated: boolean;
 };
-
-const AuthContext = createContext<AuthContextType>({
-    token: null,
-    login: async () => {},
-    register: async () => {},
-    logout: () => {},
-    isAuthenticated: false,
-});
+const AuthContext = createContext<AuthContextType>(null!);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
+    const [token, setTok] = useState<string | undefined>(localStorage.getItem("token") || undefined);
 
-    const login = async (username: string, password: string) => {
-        const res = await client.post(endpoints.auth.login, { username, password });
+    useEffect(() => setToken(token), [token]);
+
+    const login = async (u: string, p: string) => {
+        const res = await api.post("/auth/login", { username: u, password: p });
         localStorage.setItem("token", res.data.token);
-        setToken(res.data.token);
+        setTok(res.data.token);
     };
 
-    const register = async (username: string, password: string) => {
-        const res = await client.post(endpoints.auth.register, { username, password });
+    const register = async (u: string, p: string) => {
+        const res = await api.post("/auth/register", { username: u, password: p });
         localStorage.setItem("token", res.data.token);
-        setToken(res.data.token);
+        setTok(res.data.token);
     };
 
     const logout = () => {
         localStorage.removeItem("token");
-        setToken(null);
+        setTok(undefined);
+        setToken();
     };
 
-    const value: AuthContextType = {
-        token,
-        login,
-        register,
-        logout,
-        isAuthenticated: !!token,
-    };
-
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    return <AuthContext.Provider value={{ token, login, register, logout }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);
