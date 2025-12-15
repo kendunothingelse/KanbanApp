@@ -14,7 +14,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -80,5 +82,22 @@ public class UserAuthController {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email).orElseThrow();
         return ResponseEntity.ok(new AuthResponse("N/A", user.getUsername(), user.getEmail()));
+    }
+
+    @GetMapping("/users/search")
+    public ResponseEntity<List<AuthResponse>> searchUsers(@RequestParam("q") String query) {
+        String q = query.trim();
+        if (q.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        // Basic example: search by username OR email containing q (you must add these finders in UserRepository)
+        List<User> users = userRepository.findTop20ByUsernameContainingIgnoreCaseOrEmailContainingIgnoreCase(q, q);
+
+        List<AuthResponse> result = users.stream()
+                .map(u -> new AuthResponse("N/A", u.getUsername(), u.getEmail()))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(result);
     }
 }

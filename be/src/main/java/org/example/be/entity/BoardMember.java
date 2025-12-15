@@ -1,14 +1,14 @@
 package org.example.be.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "board_members")
-@Data
-@NoArgsConstructor
+@Getter
+@Setter
 public class BoardMember {
 
     @Id
@@ -16,22 +16,15 @@ public class BoardMember {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "board_id", nullable = false)
+    @JoinColumn(name = "board_id")
     private Board board;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id")
     private User user;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private BoardRole role;
 
-    @Column(name = "joined_at")
-    private LocalDateTime joinedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        joinedAt = LocalDateTime.now();
-    }
+    private LocalDateTime joinedAt = LocalDateTime.now();
 }
