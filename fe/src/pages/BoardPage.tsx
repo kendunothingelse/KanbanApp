@@ -1,33 +1,38 @@
-import React, {useEffect, useMemo, useState} from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import {
     Box, Button, Flex, Heading, Input, Modal, ModalBody, ModalCloseButton, ModalContent,
     ModalFooter, ModalHeader, ModalOverlay, Stack, Text, useDisclosure, useToast, Tooltip, Avatar, Select,
+    Tabs, TabList, TabPanels, Tab, TabPanel, AlertDialog, AlertDialogOverlay, AlertDialogContent,
+    AlertDialogHeader, AlertDialogBody, AlertDialogFooter
 } from "@chakra-ui/react";
 import {
     DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent,
     useDroppable, DragOverlay
 } from "@dnd-kit/core";
 import {
-    arrayMove, SortableContext, useSortable, verticalListSortingStrategy, defaultAnimateLayoutChanges,
+    SortableContext, useSortable, verticalListSortingStrategy, defaultAnimateLayoutChanges,
 } from "@dnd-kit/sortable";
 import {CSS} from "@dnd-kit/utilities";
 import api from "../api";
-import {Card as CardType, Column as ColumnType} from "../types";
+import {Card as CardType, Column as ColumnType, BoardMember} from "../types";
 import {useParams} from "react-router-dom";
 import InviteMemberModal from "../components/InviteMemberModal";
 import {useAuth} from "../auth/AuthContext";
 import {getAvatarColor, getAvatarColorDifferent} from "../utils/avatarColor";
+import { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip as ChartTooltip, Legend } from "chart.js";
+
+Chart.register(BarController, BarElement, CategoryScale, LinearScale, ChartTooltip, Legend);
 
 type CardProps = { card: CardType; onEdit: (c: CardType) => void; onDelete: (id: number) => void };
 
 const CardItem: React.FC<CardProps & { dragging?: boolean }> = ({card, onEdit, onDelete, dragging}) => {
     const {attributes, listeners, setNodeRef, transform, transition, isDragging} = useSortable({
         id: card.id,
-        data: {type: "card", columnId: card.column?.id ?? card.column},
+        data: {type: "card", columnId: card.column?.id ?? (card.column as any)},
         animateLayoutChanges: (args) =>
             defaultAnimateLayoutChanges({
                 ...args,
-                wasDragging: true, // luôn animate khi thay đổi
+                wasDragging: true,
             }),
     });
 
@@ -72,6 +77,7 @@ const BoardPage: React.FC = () => {
     const toast = useToast();
     const [columns, setColumns] = useState<ColumnType[]>([]);
     const [cards, setCards] = useState<CardType[]>([]);
+    const [members, setMembers] = useState<BoardMember[]>([]);
     const [newColName, setNewColName] = useState("");
 
     const [editingCard, setEditingCard] = useState<CardType | null>(null);
@@ -79,11 +85,19 @@ const BoardPage: React.FC = () => {
     const [priorityInput, setPriorityInput] = useState<string>("");
 
     const cardModal = useDisclosure();
+    const inviteModal = useDisclosure();
+    const removeModal = useDisclosure();
+    const cancelRef = useRef<HTMLButtonElement | null>(null);
+    const [memberToRemove, setMemberToRemove] = useState<BoardMember | null>(null);
+
     const [activeCard, setActiveCard] = useState<CardType | null>(null);
     const {user} = useAuth();
 
-    const [members, setMembers] = useState<{ id: number; user: { username: string } }[]>([]);
-    const mainColor = getAvatarColor(user?.username); // cần import useAuth hoặc truyền username; ở đây dùng hook mới
+    const mainColor = getAvatarColor(user?.username);
+    const sensors = useSensors(useSensor(PointerSensor, {activationConstraint: {distance: 5}}));
+
+    const chartRef = useRef<Chart | null>(null);
+    const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
     const loadMembers = async () => {
         try {
@@ -94,11 +108,6 @@ const BoardPage: React.FC = () => {
         }
     };
 
-
-    const sensors = useSensors(
-        useSensor(PointerSensor, {activationConstraint: {distance: 5}})
-    );
-
     const load = async () => {
         const [colRes, cardRes] = await Promise.all([
             api.get(`/boards/${boardId}/columns`),
@@ -107,7 +116,6 @@ const BoardPage: React.FC = () => {
         setColumns(colRes.data);
         setCards(cardRes.data);
         await loadMembers();
-
     };
 
     useEffect(() => {
@@ -120,23 +128,62 @@ const BoardPage: React.FC = () => {
         }
     }, [editingCard]);
 
-    useEffect(() => {
-        load();
-    }, [boardId]);
+    useEffect(() => { load(); }, [boardId]);
 
     const cardsByColumn = useMemo(() => {
         const map: Record<number, CardType[]> = {};
-        columns.forEach(c => {
-            map[c.id] = [];
-        });
+        columns.forEach(c => { map[c.id] = []; });
         cards.forEach(c => {
-            const colId = c.column?.id ?? c.column;
+            const colId = c.column?.id ?? (c.column as any);
             if (!map[colId]) map[colId] = [];
             map[colId].push(c);
         });
         Object.keys(map).forEach(k => map[Number(k)].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)));
         return map;
     }, [cards, columns]);
+
+    useEffect(() => {
+        const ctx = chartCanvasRef.current;
+        if (!ctx) return;
+        const labels = columns.map(c => c.name);
+        const data = columns.map(c => (cardsByColumn[c.id] || []).length);
+        if (chartRef.current) chartRef.current.destroy();
+        chartRef.current = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "Số task",
+                    data,
+                    backgroundColor: "rgba(66,153,225,0.6)",
+                    borderColor: "rgba(66,153,225,1)",
+                    borderWidth: 1,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: true }, tooltip: { enabled: true } },
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+                animation: { duration: 250, easing: "easeOutCubic" }
+            }
+        });
+    }, [columns, cardsByColumn]);
+
+    const meUsername = user?.username;
+    const myMember = members.find(m => m.user.username === meUsername);
+    const myRole = myMember?.role ?? "VIEWER";
+    const isAdmin = myRole === "ADMIN";
+    const isMember = myRole === "MEMBER";
+    const isViewer = myRole === "VIEWER";
+
+    const guard = (allowed: boolean, label: string, node: React.ReactNode) =>
+        allowed ? node : (
+            <Tooltip label={label} hasArrow>
+                <Box cursor="not-allowed" display="inline-block">
+                    {React.cloneElement(node as any, { isDisabled: true })}
+                </Box>
+            </Tooltip>
+        );
 
     const addColumn = async () => {
         if (!newColName) return;
@@ -182,6 +229,7 @@ const BoardPage: React.FC = () => {
             toast({status: "error", title: "Lỗi lưu thẻ", description: e?.response?.data || e.message});
         }
     };
+
     const deleteCard = async (id: number) => {
         await api.delete(`/cards/${id}`);
         load();
@@ -202,7 +250,7 @@ const BoardPage: React.FC = () => {
         const sourceCard = cards.find(c => c.id === activeId);
         if (!sourceCard) return;
 
-        const sourceColId = sourceCard.column?.id ?? sourceCard.column;
+        const sourceColId = sourceCard.column?.id ?? (sourceCard.column as any);
         let targetColId = sourceColId;
         let targetIndex = 0;
 
@@ -218,12 +266,6 @@ const BoardPage: React.FC = () => {
             targetIndex = colCards.length;
         }
 
-        if (targetColId === sourceColId) {
-            const colCards = cardsByColumn[sourceColId] || [];
-            const oldIndex = colCards.findIndex(c => c.id === activeId);
-            if (oldIndex === targetIndex) return;
-        }
-
         try {
             await api.post("/cards/move", {
                 cardId: activeId,
@@ -236,7 +278,6 @@ const BoardPage: React.FC = () => {
         }
     };
 
-    const inviteModal = useDisclosure();
     const renderMembers = () => {
         if (!members.length) return null;
         const firstTwo = members.slice(0, 2);
@@ -244,7 +285,7 @@ const BoardPage: React.FC = () => {
         return (
             <Flex align="center" gap="1" mr="3">
                 {firstTwo.map(m => (
-                    <Tooltip key={m.id} label={m.user.username} hasArrow>
+                    <Tooltip key={m.id} label={`${m.user.username} (${m.role})`} hasArrow>
                         <Avatar
                             size="sm"
                             name={m.user.username}
@@ -254,97 +295,132 @@ const BoardPage: React.FC = () => {
                     </Tooltip>
                 ))}
                 {extra > 0 && (
-                    <Tooltip label={members.slice(2).map(m => m.user.username).join(", ")} hasArrow>
+                    <Tooltip label={members.slice(2).map(m => `${m.user.username} (${m.role})`).join(", ")} hasArrow>
                         <Text fontSize="sm" color="gray.600">và còn +{extra} người khác</Text>
                     </Tooltip>
                 )}
             </Flex>
         );
     };
+
+    const confirmRemove = async () => {
+        if (!memberToRemove) return;
+        try {
+            await api.post("/boards/remove-member", { boardId: Number(boardId), userId: memberToRemove.user.id });
+            toast({ status: "success", title: "Đã xóa thành viên" });
+            await loadMembers();
+        } catch (e:any) {
+            toast({ status: "error", title: "Xóa thất bại", description: e?.response?.data || e.message });
+        } finally {
+            removeModal.onClose();
+            setMemberToRemove(null);
+        }
+    };
+
+    const membersList = (
+        <Stack spacing="2">
+            {members.map(m => (
+                <Flex key={m.id} align="center" justify="space-between" borderWidth="1px" borderRadius="md" p="2">
+                    <Text>{m.user.username} ({m.role})</Text>
+                    {isAdmin && m.user.username !== meUsername && (
+                        <Button size="xs" colorScheme="red" onClick={() => { setMemberToRemove(m); removeModal.onOpen(); }}>
+                            Xóa
+                        </Button>
+                    )}
+                </Flex>
+            ))}
+        </Stack>
+    );
+
     return (
         <Box p="6" bg="gray.50" minH="100vh">
-            <Flex justify="space-between" align="center" mb="4">
-                {/*Header*/}
+            <Flex justify="space-between" align="center" mb="4" gap="4" flexWrap="wrap">
                 <Heading size="lg">Board #{boardId}</Heading>
-                <Flex align="center" gap="2">
-                    {renderMembers()}
+                <Flex align="center" gap="2">{renderMembers()}</Flex>
+                <Flex gap="2" align="center" flexWrap="wrap">
+                    {guard(isAdmin, "Chỉ dành cho ADMIN tạo ra dự án này",
+                        <Button onClick={() => inviteModal.onOpen()}>Mời thành viên</Button>
+                    )}
+                    {guard(isAdmin || isMember, "Chỉ dành cho ADMIN tạo ra dự án này",
+                        <Input placeholder="Tên cột mới" value={newColName} onChange={(e) => setNewColName(e.target.value)} width="200px"/>
+                    )}
+                    {guard(isAdmin || isMember, "Chỉ dành cho ADMIN tạo ra dự án này",
+                        <Button onClick={addColumn}>Thêm cột</Button>
+                    )}
                 </Flex>
-                <Flex gap="2">
-                    <Button onClick={() => inviteModal.onOpen()}>Mời thành viên</Button>
-                    <Input placeholder="Tên cột mới" value={newColName} onChange={(e) => setNewColName(e.target.value)}
-                           width="200px"/>
-                    <Button onClick={addColumn}>Thêm cột</Button>
-                </Flex>
-
             </Flex>
 
-            <Flex gap="4" align="flex-start" overflowX="auto">
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragStart={handleDragStart}
-                    onDragEnd={handleDragEnd}
-                >
-                    {columns.map(col => (
-                        <Box key={col.id} minW="260px" bg="gray.100" p="3" borderRadius="md">
-                            <Flex justify="space-between" mb="2">
-                                <Heading size="sm">{col.name}</Heading>
-                                <Button size="xs" variant="ghost" colorScheme="red"
-                                        onClick={() => deleteColumn(col.id)}>X</Button>
-                            </Flex>
-                            <Button size="xs" mb="2" onClick={() => {
-                                setEditingCard({} as CardType);
-                                cardModal.onOpen();
-                            }}>
-                                + Thêm task
-                            </Button>
+            <Tabs colorScheme="blue" variant="enclosed">
+                <TabList>
+                    <Tab>Kanban</Tab>
+                    <Tab>Biểu đồ</Tab>
+                    <Tab>Thành viên</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel px="0">
+                        <Flex gap="4" align="flex-start" overflowX="auto">
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragStart={handleDragStart}
+                                onDragEnd={handleDragEnd}
+                            >
+                                {columns.map(col => (
+                                    <Box key={col.id} minW="260px" bg="gray.100" p="3" borderRadius="md">
+                                        <Flex justify="space-between" mb="2">
+                                            <Heading size="sm">{col.name}</Heading>
+                                            {guard(isAdmin || isMember, "Chỉ dành cho ADMIN tạo ra dự án này",
+                                                <Button size="xs" variant="ghost" colorScheme="red"
+                                                        onClick={() => deleteColumn(col.id)}>X</Button>
+                                            )}
+                                        </Flex>
+                                        {guard(isAdmin || isMember, "Chỉ dành cho ADMIN tạo ra dự án này",
+                                            <Button size="xs" mb="2" onClick={() => { setEditingCard({} as CardType); cardModal.onOpen(); }}>
+                                                + Thêm task
+                                            </Button>
+                                        )}
+                                        <ColumnDroppable columnId={col.id}>
+                                            <SortableContext
+                                                items={(cardsByColumn[col.id] || []).map(c => c.id)}
+                                                strategy={verticalListSortingStrategy}
+                                            >
+                                                <Stack spacing="2">
+                                                    {(cardsByColumn[col.id] || []).map(c => (
+                                                        <CardItem
+                                                            key={c.id}
+                                                            card={c}
+                                                            onEdit={(c) => { setEditingCard(c); cardModal.onOpen(); }}
+                                                            onDelete={deleteCard}
+                                                        />
+                                                    ))}
+                                                </Stack>
+                                            </SortableContext>
+                                        </ColumnDroppable>
+                                    </Box>
+                                ))}
 
-                            <ColumnDroppable columnId={col.id}>
-                                <SortableContext
-                                    items={(cardsByColumn[col.id] || []).map(c => c.id)}
-                                    strategy={verticalListSortingStrategy}
-                                >
-                                    <Stack spacing="2">
-                                        {(cardsByColumn[col.id] || []).map(c => (
-                                            <CardItem
-                                                key={c.id}
-                                                card={c}
-                                                onEdit={(c) => {
-                                                    setEditingCard(c);
-                                                    cardModal.onOpen();
-                                                }}
-                                                onDelete={deleteCard}
-                                            />
-                                        ))}
-                                    </Stack>
-                                </SortableContext>
-                            </ColumnDroppable>
+                                <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.25, 1, 0.5, 1)" }}>
+                                    {activeCard ? (
+                                        <CardItem card={activeCard} onEdit={() => {}} onDelete={() => {}} dragging />
+                                    ) : null}
+                                </DragOverlay>
+                            </DndContext>
+                        </Flex>
+                    </TabPanel>
+
+                    <TabPanel>
+                        <Box maxW="720px">
+                            <canvas ref={chartCanvasRef} />
                         </Box>
-                    ))}
+                    </TabPanel>
 
-                    {/* Drag overlay for smoother visual feedback */}
-                    <DragOverlay dropAnimation={{
-                        duration: 180,
-                        easing: "cubic-bezier(0.25, 1, 0.5, 1)"
-                    }}>
-                        {activeCard ? (
-                            <CardItem
-                                card={activeCard}
-                                onEdit={() => {
-                                }}
-                                onDelete={() => {
-                                }}
-                                dragging
-                            />
-                        ) : null}
-                    </DragOverlay>
-                </DndContext>
-            </Flex>
+                    <TabPanel>
+                        {membersList}
+                    </TabPanel>
+                </TabPanels>
+            </Tabs>
 
-            <Modal isOpen={cardModal.isOpen} onClose={() => {
-                cardModal.onClose();
-                setEditingCard(null);
-            }}>
+            <Modal isOpen={cardModal.isOpen} onClose={() => { cardModal.onClose(); setEditingCard(null); }}>
                 <ModalOverlay/>
                 <ModalContent>
                     <ModalHeader>{editingCard?.id ? "Sửa task" : "Thêm task"}</ModalHeader>
@@ -354,18 +430,12 @@ const BoardPage: React.FC = () => {
                             <Input
                                 placeholder="Tiêu đề"
                                 value={editingCard?.title ?? ""}
-                                onChange={(e) => setEditingCard(prev => ({
-                                    ...(prev || {} as any),
-                                    title: e.target.value
-                                }))}
+                                onChange={(e) => setEditingCard(prev => ({ ...(prev || {} as any), title: e.target.value }))}
                             />
                             <Input
                                 placeholder="Mô tả"
                                 value={editingCard?.description ?? ""}
-                                onChange={(e) => setEditingCard(prev => ({
-                                    ...(prev || {} as any),
-                                    description: e.target.value
-                                }))}
+                                onChange={(e) => setEditingCard(prev => ({ ...(prev || {} as any), description: e.target.value }))}
                             />
                             <Input
                                 type="date"
@@ -383,13 +453,14 @@ const BoardPage: React.FC = () => {
                                 <option value="HIGH">HIGH</option>
                             </Select>
                             {editingCard?.createdAt && (
-                                <Text fontSize="sm" color="gray.500">Ngày
-                                    tạo: {editingCard.createdAt.slice(0, 10)}</Text>
+                                <Text fontSize="sm" color="gray.500">
+                                    Ngày tạo: {editingCard.createdAt.slice(0, 10)}
+                                </Text>
                             )}
-                        </Stack> </ModalBody>
+                        </Stack>
+                    </ModalBody>
                     <ModalFooter>
-                        <Button mr={3} variant="ghost"
-                                onClick={cardModal.onClose}>Hủy</Button>
+                        <Button mr={3} variant="ghost" onClick={cardModal.onClose}>Hủy</Button>
                         <Button
                             colorScheme="blue"
                             onClick={() => {
@@ -398,10 +469,7 @@ const BoardPage: React.FC = () => {
                                     return;
                                 }
                                 const colId = editingCard?.column?.id ?? columns[0]?.id;
-                                if (!colId) {
-                                    toast({status: "error", title: "Chưa có cột"});
-                                    return;
-                                }
+                                if (!colId) { toast({status: "error", title: "Chưa có cột"}); return; }
                                 saveCard({...editingCard, columnId: colId});
                             }}
                         >
@@ -410,12 +478,32 @@ const BoardPage: React.FC = () => {
                     </ModalFooter>
                 </ModalContent>
             </Modal>
+
             <InviteMemberModal
                 isOpen={inviteModal.isOpen}
                 onClose={inviteModal.onClose}
                 boardId={Number(boardId)}
                 onInvited={loadMembers}
             />
+
+            <AlertDialog
+                isOpen={removeModal.isOpen}
+                leastDestructiveRef={cancelRef}
+                onClose={removeModal.onClose}
+            >
+                <AlertDialogOverlay>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>Xóa thành viên</AlertDialogHeader>
+                        <AlertDialogBody>
+                            Bạn chắc chắn muốn xóa {memberToRemove?.user.username} khỏi board? (Chỉ ADMIN)
+                        </AlertDialogBody>
+                        <AlertDialogFooter>
+                            <Button ref={cancelRef} onClick={removeModal.onClose}>Hủy</Button>
+                            <Button colorScheme="red" ml={3} onClick={confirmRemove}>Xóa</Button>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialogOverlay>
+            </AlertDialog>
         </Box>
     );
 };

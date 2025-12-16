@@ -41,8 +41,8 @@ const CreateBoardModal: React.FC<Props> = ({ isOpen, onClose, workspaceId, onCre
     }, [query]);
 
     const createBoard = async () => {
-        if (workspaceId < 0) {
-            toast({ status: "warning", title: "Chưa có workspace", description: "Hãy tạo/chọn workspace trước." });
+        if (workspaceId <= 0) {
+            toast({ status: "warning", title: "Chưa chọn workspace hợp lệ" });
             return;
         }
         if (!name) {
@@ -57,7 +57,7 @@ const CreateBoardModal: React.FC<Props> = ({ isOpen, onClose, workspaceId, onCre
                 await api.post("/boards/invite", { boardId, userId: selectedUser.id, role });
             }
             toast({ status: "success", title: "Tạo board thành công" });
-            onCreated();  // reload board list
+            onCreated();
             onClose();
             setName("");
             setQuery("");

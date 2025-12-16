@@ -10,4 +10,8 @@ public class Workspace {
 
     @Column(nullable = false)
     private String name;
+
+
+    @ManyToOne(optional = false)
+    private User owner;
 }

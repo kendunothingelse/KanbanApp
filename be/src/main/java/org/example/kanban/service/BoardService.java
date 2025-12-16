@@ -30,7 +30,6 @@ public class BoardService {
                 .orElseThrow(() -> new RuntimeException("Workspace not found"));
         Board b = Board.builder().name(req.name()).workspace(ws).build();
         boardRepo.save(b);
-        // creator is ADMIN
         boardMemberRepo.save(BoardMember.builder()
                 .board(b).user(current).role(Role.ADMIN).build());
         return b;
@@ -41,8 +40,6 @@ public class BoardService {
         Board board = boardRepo.findById(boardId)
                 .orElseThrow(() -> new RuntimeException("Board not found"));
         permissionService.checkManageMember(current, board);
-
-        // Xóa assignee + card + column + member trước để tránh lỗi ràng buộc
         var columns = columnRepo.findByBoardOrderByPositionAsc(board);
         for (var col : columns) {
             var cards = cardRepo.findByColumnOrderByPositionAsc(col);
@@ -67,7 +64,7 @@ public class BoardService {
     public void invite(BoardDto.InviteRequest req, User current) {
         Board board = boardRepo.findById(req.boardId())
                 .orElseThrow(() -> new RuntimeException("Board not found"));
-        permissionService.checkManageMember(current, board);
+        permissionService.checkAddMember(current, board); // ADMIN or MEMBER
         User target = userRepo.findById(req.userId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
         Role role = Role.valueOf(req.role());
@@ -81,7 +78,7 @@ public class BoardService {
     public void changeRole(BoardDto.ChangeRoleRequest req, User current) {
         Board board = boardRepo.findById(req.boardId())
                 .orElseThrow(() -> new RuntimeException("Board not found"));
-        permissionService.checkManageMember(current, board);
+        permissionService.checkManageMember(current, board); // ADMIN only
         BoardMember bm = boardMemberRepo.findByBoardAndUser(board,
                         userRepo.findById(req.userId()).orElseThrow())
                 .orElseThrow(() -> new RuntimeException("Member not found"));
@@ -93,7 +90,7 @@ public class BoardService {
     public void removeMember(BoardDto.RemoveMemberRequest req, User current) {
         Board board = boardRepo.findById(req.boardId())
                 .orElseThrow(() -> new RuntimeException("Board not found"));
-        permissionService.checkManageMember(current, board);
+        permissionService.checkManageMember(current, board); // ADMIN only
         BoardMember bm = boardMemberRepo.findByBoardAndUser(board,
                         userRepo.findById(req.userId()).orElseThrow())
                 .orElseThrow(() -> new RuntimeException("Member not found"));

@@ -1,6 +1,5 @@
 package org.example.kanban.service;
 
-
 import lombok.RequiredArgsConstructor;
 import org.example.kanban.entity.Board;
 import org.example.kanban.entity.Permission;
@@ -20,7 +19,7 @@ public class PermissionService {
 
     private static final Map<Role, Set<Permission>> ROLE_PERMISSIONS = Map.of(
             Role.ADMIN, EnumSet.allOf(Permission.class),
-            Role.MEMBER, EnumSet.of(Permission.CARD_EDIT, Permission.CARD_VIEW),
+            Role.MEMBER, EnumSet.of(Permission.CARD_EDIT, Permission.CARD_VIEW, Permission.COLUMN_EDIT, Permission.BOARD_MANAGE),
             Role.VIEWER, EnumSet.of(Permission.CARD_VIEW)
     );
 
@@ -36,7 +35,19 @@ public class PermissionService {
             throw new RuntimeException("Forbidden: lacking permission " + permission);
     }
 
+    // ADMIN-only (xóa member, đổi role, xóa board…)
     public void checkManageMember(User user, Board board) {
-        check(user, board, Permission.BOARD_MANAGE); // chỉ ADMIN có
+        var memberOpt = boardMemberRepository.findByBoardAndUser(board, user);
+        if (memberOpt.isEmpty() || memberOpt.get().getRole() != Role.ADMIN)
+            throw new RuntimeException("Forbidden: only ADMIN allowed");
+    }
+
+    // ADMIN hoặc MEMBER được mời thêm thành viên
+    public void checkAddMember(User user, Board board) {
+        var memberOpt = boardMemberRepository.findByBoardAndUser(board, user);
+        if (memberOpt.isEmpty()) throw new RuntimeException("Forbidden: not a member");
+        Role role = memberOpt.get().getRole();
+        if (role != Role.ADMIN && role != Role.MEMBER)
+            throw new RuntimeException("Forbidden: only ADMIN/MEMBER can invite");
     }
 }

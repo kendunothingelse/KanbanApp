@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Box, Button, Heading, Input, Stack, useToast } from "@chakra-ui/react";
+import {Box, Button, Heading, HStack, Input, Link, Stack, Text, useToast} from "@chakra-ui/react";
 import api from "../api";
-import { useNavigate } from "react-router-dom";
+import {Link as RouterLink, useNavigate} from "react-router-dom";
 
 const RegisterPage: React.FC = () => {
     const [username, setUsername] = useState("");
@@ -31,6 +31,12 @@ const RegisterPage: React.FC = () => {
                 <Input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
                 <Button isLoading={loading} onClick={onSubmit} colorScheme="blue">Đăng ký</Button>
             </Stack>
+            <HStack>
+                <Text>Bạn đã có tài khoản?</Text>
+                <Link as={RouterLink} to="/login" color="blue.500">
+                    Đăng nhập
+                </Link>
+            </HStack>
         </Box>
     );
 };
