@@ -1,10 +1,11 @@
 package org.example.be.controller;
 
-import org.example.be.auth.dto.*;
+import lombok.RequiredArgsConstructor;
+import org.example.be.auth.dto.BoardDto;
+import org.example.be.auth.dto.CardDto;
 import org.example.be.entity.User;
 import org.example.be.repository.UserRepository;
 import org.example.be.service.CardService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;

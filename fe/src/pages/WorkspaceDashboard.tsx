@@ -12,9 +12,10 @@ import CreateBoardModal from "../components/CreateBoardModal";
 import {useNavigate} from "react-router-dom";
 import CreateWorkspaceButton from "../components/CreateWorkspaceButton";
 import {getAvatarColor, getAvatarColorDifferent} from "../utils/avatarColor";
+import {Badge} from "@chakra-ui/react";
 
 type BoardWithMembers = Board & { members?: { id: number; user: { id: number; username: string } }[] };
-const MAIN_WS: Workspace = { id: 0, name: "Tất cả board" };
+const MAIN_WS: Workspace = {id: 0, name: "Tất cả board"};
 
 const WorkspaceDashboard: React.FC = () => {
     const {user, logout} = useAuth();
@@ -49,19 +50,22 @@ const WorkspaceDashboard: React.FC = () => {
             if (selectedWs && !list.find(w => w.id === selectedWs)) {
                 setSelectedWs(MAIN_WS.id);
             }
-        } catch (e:any) {
-            toast({status:"error", title:"Lỗi lấy workspace", description: e?.response?.data || e.message});
+        } catch (e: any) {
+            toast({status: "error", title: "Lỗi lấy workspace", description: e?.response?.data || e.message});
         }
     };
 
     // search workspaces from backend, but keep MAIN_WS on top
     const searchWorkspaces = async (q: string) => {
-        if (!q.trim()) { await loadOwnedWorkspaces(); return; }
+        if (!q.trim()) {
+            await loadOwnedWorkspaces();
+            return;
+        }
         try {
             const res = await api.get(`/workspaces/search?q=${encodeURIComponent(q)}`);
             setWorkspaces([MAIN_WS, ...res.data]);
-        } catch (e:any) {
-            toast({status:"error", title:"Lỗi tìm workspace", description: e?.response?.data || e.message});
+        } catch (e: any) {
+            toast({status: "error", title: "Lỗi tìm workspace", description: e?.response?.data || e.message});
         }
     };
 
@@ -80,21 +84,21 @@ const WorkspaceDashboard: React.FC = () => {
         if (id === MAIN_WS.id) return;
         try {
             await api.delete(`/workspaces/${id}`);
-            toast({status:"success", title:"Đã xóa workspace"});
+            toast({status: "success", title: "Đã xóa workspace"});
             await loadOwnedWorkspaces();
             await loadBoards();
-        } catch (e:any) {
-            toast({status:"error", title:"Xóa workspace thất bại", description: e?.response?.data || e.message});
+        } catch (e: any) {
+            toast({status: "error", title: "Xóa workspace thất bại", description: e?.response?.data || e.message});
         }
     };
 
     const deleteBoard = async (id: number) => {
         try {
             await api.delete(`/boards/${id}`);
-            toast({status:"success", title:"Đã xóa board"});
+            toast({status: "success", title: "Đã xóa board"});
             await loadBoards();
-        } catch (e:any) {
-            toast({status:"error", title:"Xóa board thất bại", description: e?.response?.data || e.message});
+        } catch (e: any) {
+            toast({status: "error", title: "Xóa board thất bại", description: e?.response?.data || e.message});
         }
     };
 
@@ -126,15 +130,27 @@ const WorkspaceDashboard: React.FC = () => {
         );
     };
 
+    const statusBadge = (status?: string) => {
+        if (!status) return null;
+        const color = status === "DONE" ? "green" : "yellow";
+        return (
+            <Badge ml="2" colorScheme={color}>
+                {status === "DONE" ? "DONE" : "IN PROGRESS"}
+            </Badge>
+        );
+    };
     return (
         <Box p="6">
             <Flex align="center" justify="space-between" mb="6">
                 <Flex align="center" gap="3">
-                    <Avatar name={user?.username} bg={mainColor} color="white" />
+                    <Avatar name={user?.username} bg={mainColor} color="white"/>
                     <Heading size="md">Workspace Dashboard</Heading>
                 </Flex>
                 <Flex gap="3">
-                    <CreateWorkspaceButton onCreated={async () => { await loadOwnedWorkspaces(); await loadBoards(); }} />
+                    <CreateWorkspaceButton onCreated={async () => {
+                        await loadOwnedWorkspaces();
+                        await loadBoards();
+                    }}/>
                     <Button colorScheme="blue" onClick={onOpen} isDisabled={noWorkspaceOwned}>
                         Tạo board mới
                     </Button>
@@ -151,7 +167,7 @@ const WorkspaceDashboard: React.FC = () => {
 
             {noWorkspaceOwned && (
                 <Alert status="info" mb="4">
-                    <AlertIcon />
+                    <AlertIcon/>
                     <Box>
                         <AlertTitle>Chưa có workspace!</AlertTitle>
                         <AlertDescription>Hãy tạo workspace trước khi tạo board.</AlertDescription>
@@ -174,7 +190,7 @@ const WorkspaceDashboard: React.FC = () => {
                                 <IconButton
                                     aria-label="Xóa workspace"
                                     size="sm"
-                                    icon={<CloseIcon boxSize={2.5} />}
+                                    icon={<CloseIcon boxSize={2.5}/>}
                                     onClick={() => deleteWorkspace(ws.id)}
                                 />
                             )}
@@ -195,12 +211,16 @@ const WorkspaceDashboard: React.FC = () => {
                              _hover={{shadow: "md", cursor: "pointer"}}
                              onClick={() => handleBoardClick(b)}>
                             <Flex justify="space-between" align="center" mb="2">
-                                <Heading size="md">{b.name}</Heading>
+                                <Heading size="md">{b.name}
+                                    {statusBadge(b.status)}</Heading>
                                 <IconButton
                                     aria-label="Xóa board"
                                     size="sm"
-                                    icon={<CloseIcon boxSize={2.5} />}
-                                    onClick={(e) => { e.stopPropagation(); deleteBoard(b.id); }}
+                                    icon={<CloseIcon boxSize={2.5}/>}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteBoard(b.id);
+                                    }}
                                 />
                             </Flex>
                             <Text fontSize="sm" color="gray.500">
@@ -216,7 +236,10 @@ const WorkspaceDashboard: React.FC = () => {
                 isOpen={isOpen}
                 onClose={onClose}
                 workspaceId={selectedWs ?? -1}
-                onCreated={async () => { await loadBoards(); await loadOwnedWorkspaces(); }}
+                onCreated={async () => {
+                    await loadBoards();
+                    await loadOwnedWorkspaces();
+                }}
             />
         </Box>
     );

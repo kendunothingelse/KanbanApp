@@ -28,6 +28,11 @@ public class BoardController {
         return boardService.createBoard(req, current(ud));
     }
 
+    @PutMapping("/{id}")
+    public Object update(@PathVariable Long id, @RequestBody BoardDto.BoardUpdateRequest req, @AuthenticationPrincipal UserDetails ud) {
+        return boardService.updateBoard(id, req, current(ud));
+    }
+
     @DeleteMapping("/{id}")
     public void deleteBoard(@PathVariable Long id, @AuthenticationPrincipal UserDetails ud) {
         boardService.deleteBoard(id, current(ud));

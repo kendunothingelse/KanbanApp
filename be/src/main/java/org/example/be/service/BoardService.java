@@ -2,14 +2,12 @@ package org.example.be.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.be.auth.dto.BoardDto;
-import org.example.be.entity.Board;
-import org.example.be.entity.BoardMember;
-import org.example.be.entity.Role;
-import org.example.be.entity.User;
+import org.example.be.entity.*;
 import org.example.be.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -20,7 +18,6 @@ public class BoardService {
     private final BoardMemberRepository boardMemberRepo;
     private final PermissionService permissionService;
     private final UserRepository userRepo;
-    private final ColumnRepository columnRepo;
     private final CardRepository cardRepo;
     private final CardAssigneeRepository cardAssigneeRepo;
 
@@ -28,7 +25,11 @@ public class BoardService {
     public Board createBoard(BoardDto.BoardCreateRequest req, User current) {
         var ws = workspaceRepo.findById(req.workspaceId())
                 .orElseThrow(() -> new RuntimeException("Workspace not found"));
-        Board b = Board.builder().name(req.name()).workspace(ws).build();
+        Board b = Board.builder()
+                .name(req.name())
+                .workspace(ws)
+                .status(BoardStatus.IN_PROGRESS)
+                .build();
         boardRepo.save(b);
         boardMemberRepo.save(BoardMember.builder()
                 .board(b).user(current).role(Role.ADMIN).build());
@@ -36,19 +37,28 @@ public class BoardService {
     }
 
     @Transactional
+    public Board updateBoard(Long id, BoardDto.BoardUpdateRequest req, User current) {
+        Board b = boardRepo.findById(id).orElseThrow(() -> new RuntimeException("Board not found"));
+        permissionService.checkManageMember(current, b); // only ADMIN
+
+        if (req.name() != null && !req.name().isBlank()) b.setName(req.name());
+        if (req.status() != null) b.setStatus(BoardStatus.valueOf(req.status()));
+        b.setEndDate(req.endDate());
+        b.setWipLimit(req.wipLimit());
+
+        return boardRepo.save(b);
+    }
+
+    @Transactional
     public void deleteBoard(Long boardId, User current) {
         Board board = boardRepo.findById(boardId)
                 .orElseThrow(() -> new RuntimeException("Board not found"));
         permissionService.checkManageMember(current, board);
-        var columns = columnRepo.findByBoardOrderByPositionAsc(board);
-        for (var col : columns) {
-            var cards = cardRepo.findByColumnOrderByPositionAsc(col);
-            for (var card : cards) {
-                var assignees = cardAssigneeRepo.findByCard(card);
-                cardAssigneeRepo.deleteAll(assignees);
-                cardRepo.delete(card);
-            }
-            columnRepo.delete(col);
+        var cards = cardRepo.findByBoard(board);
+        for (var card : cards) {
+            var assignees = cardAssigneeRepo.findByCard(card);
+            cardAssigneeRepo.deleteAll(assignees);
+            cardRepo.delete(card);
         }
         var members = boardMemberRepo.findByBoard(board);
         boardMemberRepo.deleteAll(members);
