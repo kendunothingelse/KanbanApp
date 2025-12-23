@@ -79,13 +79,14 @@ public class CardService {
 
         Card saved = cardRepo.save(card);
 
-        // record history on status change
+        // record history on status change OR title/desc change
         if (req.status() != null && oldStatus != saved.getStatus()) {
             cardHistoryRepo.save(CardHistory.builder()
                     .card(saved)
                     .fromStatus(oldStatus)
                     .toStatus(saved.getStatus())
                     .changeDate(LocalDateTime.now())
+                    .actor(current) // NEW
                     .build());
         }
         return saved;
@@ -130,7 +131,7 @@ public class CardService {
         card.setPosition(req.targetPosition());
         cardRepo.save(card);
 
-        // reorder positions in target status
+        // reorder positions ...
         var cards = cardRepo.findByBoardAndStatusOrderByPositionAsc(board, targetStatus);
         cards.sort(Comparator.comparing(Card::getPosition, Comparator.nullsLast(Integer::compareTo)));
         int pos = 0;
@@ -144,6 +145,7 @@ public class CardService {
                     .fromStatus(oldStatus)
                     .toStatus(targetStatus)
                     .changeDate(LocalDateTime.now())
+                    .actor(current) // NEW
                     .build());
         }
         return card;

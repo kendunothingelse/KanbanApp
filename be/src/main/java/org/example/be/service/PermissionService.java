@@ -32,7 +32,7 @@ public class PermissionService {
 
     public void check(User user, Board board, Permission permission) {
         if (!hasPermission(user, board, permission))
-            throw new RuntimeException("Forbidden: lacking permission " + permission);
+            throw new RuntimeException("Bạn không có quyền di chuyển hay chỉnh sửa task.\n" + permission);
     }
 
     // ADMIN-only (xóa member, đổi role, xóa board…)

@@ -49,4 +49,5 @@ export interface CardHistory {
     toStatus: Status;
     changeDate: string;
     card: Card;
+    actor?: User; // thêm thông tin user đã thao tác
 }

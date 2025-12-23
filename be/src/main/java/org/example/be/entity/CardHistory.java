@@ -22,4 +22,7 @@ public class CardHistory {
 
     @Column(nullable = false)
     private LocalDateTime changeDate;
+
+    @ManyToOne(optional = false)
+    private User actor; // NEW: ai thao tác
 }

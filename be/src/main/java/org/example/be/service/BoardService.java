@@ -7,7 +7,6 @@ import org.example.be.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -74,14 +73,25 @@ public class BoardService {
     public void invite(BoardDto.InviteRequest req, User current) {
         Board board = boardRepo.findById(req.boardId())
                 .orElseThrow(() -> new RuntimeException("Board not found"));
-        permissionService.checkAddMember(current, board); // ADMIN or MEMBER
+        // ADMIN hoặc MEMBER đều được phép mời (đã check trong PermissionService)
+        permissionService.checkAddMember(current, board);
+
+        // Lấy role của người mời
+        BoardMember inviter = boardMemberRepo.findByBoardAndUser(board, current)
+                .orElseThrow(() -> new RuntimeException("Forbidden: not a member"));
+        Role targetRole = Role.valueOf(req.role());
+        // Nếu người mời là MEMBER thì không được mời với quyền ADMIN
+        if (inviter.getRole() == Role.MEMBER && targetRole == Role.ADMIN) {
+            throw new RuntimeException("Members cannot invite with ADMIN role");
+        }
+
         User target = userRepo.findById(req.userId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        Role role = Role.valueOf(req.role());
         if (boardMemberRepo.findByBoardAndUser(board, target).isPresent())
             throw new RuntimeException("Already member");
+
         boardMemberRepo.save(BoardMember.builder()
-                .board(board).user(target).role(role).build());
+                .board(board).user(target).role(targetRole).build());
     }
 
     @Transactional

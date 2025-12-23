@@ -1,5 +1,6 @@
 package org.example.be.controller;
 
+import org.example.be.auth.dto.BoardForecastDto;
 import org.example.be.entity.BoardMember;
 import org.example.be.entity.Card;
 import org.example.be.entity.CardHistory;
@@ -34,5 +35,10 @@ public class BoardQueryController {
     @GetMapping("/{boardId}")
     public Board detail(@PathVariable Long boardId) {
         return boardQueryService.getBoard(boardId);
+    }
+
+    @GetMapping("/{boardId}/forecast")
+    public BoardForecastDto forecast(@PathVariable Long boardId) {
+        return boardQueryService.forecast(boardId);
     }
 }

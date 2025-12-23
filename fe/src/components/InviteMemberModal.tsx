@@ -1,7 +1,22 @@
 import React, { useEffect, useState } from "react";
 import {
-    Button, FormControl, FormLabel, Input, Modal, ModalBody, ModalCloseButton,
-    ModalContent, ModalFooter, ModalHeader, ModalOverlay, Select, Stack, Text, Box, VStack, useToast
+    Button,
+    FormControl,
+    FormLabel,
+    Input,
+    Modal,
+    ModalBody,
+    ModalCloseButton,
+    ModalContent,
+    ModalFooter,
+    ModalHeader,
+    ModalOverlay,
+    Select,
+    Stack,
+    Text,
+    Box,
+    VStack,
+    useToast,
 } from "@chakra-ui/react";
 import api from "../api";
 
@@ -13,11 +28,17 @@ type Props = {
     boardId: number;
     onInvited: () => void;
     defaultRole?: string;
+    allowedRoles?: string[]; // mới: giới hạn quyền có thể mời
 };
 
-const roles = ["ADMIN", "MEMBER", "VIEWER"];
-
-const InviteMemberModal: React.FC<Props> = ({ isOpen, onClose, boardId, onInvited, defaultRole = "MEMBER" }) => {
+const InviteMemberModal: React.FC<Props> = ({
+                                                isOpen,
+                                                onClose,
+                                                boardId,
+                                                onInvited,
+                                                defaultRole = "MEMBER",
+                                                allowedRoles = ["ADMIN", "MEMBER", "VIEWER"],
+                                            }) => {
     const [query, setQuery] = useState("");
     const [selectedUser, setSelectedUser] = useState<UserSuggestion | null>(null);
     const [role, setRole] = useState(defaultRole);
@@ -25,10 +46,20 @@ const InviteMemberModal: React.FC<Props> = ({ isOpen, onClose, boardId, onInvite
     const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
     const toast = useToast();
 
+    // Đồng bộ role mặc định theo allowedRoles khi props thay đổi
+    useEffect(() => {
+        if (!allowedRoles.includes(role)) {
+            setRole(allowedRoles[0]);
+        }
+    }, [allowedRoles, role]);
+
     useEffect(() => {
         let ignore = false;
         const run = async () => {
-            if (!query) { setSuggestions([]); return; }
+            if (!query) {
+                setSuggestions([]);
+                return;
+            }
             try {
                 const res = await api.get(`/users/search?prefix=${encodeURIComponent(query)}`);
                 if (!ignore) setSuggestions(res.data.slice(0, 4));
@@ -37,7 +68,9 @@ const InviteMemberModal: React.FC<Props> = ({ isOpen, onClose, boardId, onInvite
             }
         };
         run();
-        return () => { ignore = true; };
+        return () => {
+            ignore = true;
+        };
     }, [query]);
 
     const invite = async () => {
@@ -88,22 +121,32 @@ const InviteMemberModal: React.FC<Props> = ({ isOpen, onClose, boardId, onInvite
                             <Input
                                 placeholder="Nhập chữ cái đầu"
                                 value={query}
-                                onChange={(e) => { setQuery(e.target.value); setSelectedUser(null); }}
+                                onChange={(e) => {
+                                    setQuery(e.target.value);
+                                    setSelectedUser(null);
+                                }}
                             />
                             {query && (
                                 <Box borderWidth="1px" borderRadius="md" mt="2" maxH="150px" overflowY="auto">
                                     <VStack align="stretch" spacing="0">
-                                        {suggestions.map(s => (
+                                        {suggestions.map((s) => (
                                             <Box
                                                 key={s.id}
-                                                px="3" py="2" _hover={{ bg: "gray.100", cursor: "pointer" }}
-                                                onClick={() => { setSelectedUser(s); setQuery(s.username); }}
+                                                px="3"
+                                                py="2"
+                                                _hover={{ bg: "gray.100", cursor: "pointer" }}
+                                                onClick={() => {
+                                                    setSelectedUser(s);
+                                                    setQuery(s.username);
+                                                }}
                                             >
                                                 {s.username}
                                             </Box>
                                         ))}
                                         {showNoResult && (
-                                            <Text px="3" py="2" color="red.500">Không tìm được tên username tương tự</Text>
+                                            <Text px="3" py="2" color="red.500">
+                                                Không tìm được tên username tương tự
+                                            </Text>
                                         )}
                                     </VStack>
                                 </Box>
@@ -112,13 +155,19 @@ const InviteMemberModal: React.FC<Props> = ({ isOpen, onClose, boardId, onInvite
                         <FormControl>
                             <FormLabel>Role</FormLabel>
                             <Select value={role} onChange={(e) => setRole(e.target.value)}>
-                                {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                                {allowedRoles.map((r) => (
+                                    <option key={r} value={r}>
+                                        {r}
+                                    </option>
+                                ))}
                             </Select>
                         </FormControl>
                     </Stack>
                 </ModalBody>
                 <ModalFooter>
-                    <Button mr={3} onClick={onClose}>Hủy</Button>
+                    <Button mr={3} onClick={onClose}>
+                        Hủy
+                    </Button>
                     <Button colorScheme="blue" onClick={invite} isDisabled={!selectedUser} isLoading={loading}>
                         Mời
                     </Button>

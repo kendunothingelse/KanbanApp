@@ -1,10 +1,23 @@
 const colorPool = [
-    "red.400","orange.400","yellow.400","green.400","teal.400",
-    "blue.400","cyan.400","purple.400","pink.400","linkedin.400"
+    "#1E90FF", // DodgerBlue
+    "#2E8B57", // SeaGreen
+    "#FF7F50", // Coral
+    "#FFB347", // Pastel Orange
+    "#FF69B4", // HotPink
+    "#8A2BE2", // BlueViolet
+    "#20B2AA", // LightSeaGreen
+    "#6A5ACD", // SlateBlue
+    "#FF4500", // OrangeRed
+    "#00BFFF", // DeepSkyBlue
+    "#228B22", // ForestGreen
+    "#DA70D6", // Orchid
+    "#E9967A", // DarkSalmon
+    "#C71585", // MediumVioletRed
+    "#FF8C00", // DarkOrange
 ];
 
 export function getAvatarColor(name?: string) {
-    if (!name) return "gray.400";
+    if (!name) return colorPool[0];
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
         hash = (hash << 5) - hash + name.charCodeAt(i);
@@ -13,12 +26,10 @@ export function getAvatarColor(name?: string) {
     return colorPool[Math.abs(hash) % colorPool.length];
 }
 
-// Lấy màu khác với màu chính (shift 1 bước)
 export function getAvatarColorDifferent(name: string, excludeColor?: string) {
     const base = getAvatarColor(name);
     if (!excludeColor) return base;
     if (base !== excludeColor) return base;
-    // chọn màu kế tiếp trong pool
     const idx = colorPool.indexOf(base);
     return colorPool[(idx + 1) % colorPool.length];
 }
