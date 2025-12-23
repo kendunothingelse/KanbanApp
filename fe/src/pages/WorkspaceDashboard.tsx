@@ -2,19 +2,23 @@ import React, {useEffect, useMemo, useState} from "react";
 import {
     Avatar, Box, Button, Flex, Heading, SimpleGrid, Stack, Text,
     useDisclosure, useToast, Alert, AlertIcon, AlertTitle, AlertDescription,
-    IconButton, HStack, Tooltip, Input
+    IconButton, HStack, Tooltip, Input, Progress
 } from "@chakra-ui/react";
 import {CloseIcon} from "@chakra-ui/icons";
 import {useAuth} from "../auth/AuthContext";
 import api from "../api";
-import {Board, Workspace} from "../types";
+import {Board, Workspace, BoardProgress} from "../types";
 import CreateBoardModal from "../components/CreateBoardModal";
 import {useNavigate} from "react-router-dom";
 import CreateWorkspaceButton from "../components/CreateWorkspaceButton";
 import {getAvatarColor, getAvatarColorDifferent} from "../utils/avatarColor";
 import {Badge} from "@chakra-ui/react";
 
-type BoardWithMembers = Board & { members?: { id: number; user: { id: number; username: string } }[] };
+type BoardWithMembers = Board & {
+    members?: { id: number; user: { id: number; username: string } }[];
+    // [NEW] Thêm progress info
+    progress?: BoardProgress;
+};
 const MAIN_WS: Workspace = {id: 0, name: "Tất cả board"};
 
 const WorkspaceDashboard: React.FC = () => {
@@ -29,16 +33,32 @@ const WorkspaceDashboard: React.FC = () => {
 
     const loadBoards = async () => {
         const res = await api.get("/boards/me");
-        const bs: BoardWithMembers[] = res.data;
-        const withMembers = await Promise.all(bs.map(async b => {
+        const bs:  BoardWithMembers[] = res.data;
+
+        // [MODIFIED] Load members và progress cho mỗi board
+        const withMembersAndProgress = await Promise.all(bs.map(async b => {
+            let members: any[] = [];
+            let progress: BoardProgress = { total: 0, done: 0 };
+
             try {
-                const memRes = await api.get(`/boards/${b.id}/members`);
-                return {...b, members: memRes.data};
+                const memRes = await api. get(`/boards/${b.id}/members`);
+                members = memRes.data;
             } catch {
-                return {...b, members: []};
+                members = [];
             }
+
+            // [NEW] Load progress cho mỗi board
+            try {
+                const progressRes = await api. get(`/boards/${b.id}/progress`);
+                progress = progressRes.data;
+            } catch {
+                progress = { total: 0, done: 0 };
+            }
+
+            return {... b, members, progress};
         }));
-        setBoards(withMembers);
+
+        setBoards(withMembersAndProgress);
     };
 
     const loadOwnedWorkspaces = async () => {
@@ -130,15 +150,75 @@ const WorkspaceDashboard: React.FC = () => {
         );
     };
 
-    const statusBadge = (status?: string) => {
+    const statusBadge = (status?:  string) => {
         if (!status) return null;
         const color = status === "DONE" ? "green" : "yellow";
         return (
             <Badge ml="2" colorScheme={color}>
-                {status === "DONE" ? "DONE" : "IN PROGRESS"}
+                {status === "DONE" ?  "DONE" : "IN PROGRESS"}
             </Badge>
         );
     };
+
+    const renderProgressBar = (progress?:  BoardProgress, boardStatus?: string) => {
+        if (!progress) return null;
+
+        const { total, done } = progress;
+
+        // Nếu không có task nào, hiển thị thanh rỗng
+        if (total === 0) {
+            return (
+                <Box mt="3">
+                    <Flex justify="space-between" mb="1">
+                        <Text fontSize="xs" color="gray. 500">Tiến độ</Text>
+                        <Text fontSize="xs" color="gray.500">0/0 tasks</Text>
+                    </Flex>
+                    <Progress
+                        value={0}
+                        size="sm"
+                        borderRadius="full"
+                        colorScheme="gray"
+                    />
+                </Box>
+            );
+        }
+
+        const percentage = Math.round((done / total) * 100);
+        const isComplete = done === total;
+
+        // [NEW] Màu sắc:  green nếu hoàn thành 100%, yellow nếu chưa
+        const colorScheme = isComplete ? "green" :  "yellow";
+
+        return (
+            <Box mt="3">
+                {/* [NEW] Hiển thị phần trăm và số task */}
+                <Flex justify="space-between" mb="1">
+                    <Text fontSize="xs" color="gray.600" fontWeight="medium">
+                        Tiến độ:  {percentage}%
+                    </Text>
+                    <Text fontSize="xs" color={isComplete ? "green. 600" : "gray.600"} fontWeight="medium">
+                        {done}/{total} tasks
+                    </Text>
+                </Flex>
+                {/* [NEW] Thanh Progress với màu động */}
+                <Progress
+                    value={percentage}
+                    size="sm"
+                    borderRadius="full"
+                    colorScheme={colorScheme}
+                    hasStripe={! isComplete}
+                    isAnimated={!isComplete}
+                />
+                {/* [NEW] Hiển thị thông báo khi hoàn thành */}
+                {isComplete && total > 0 && (
+                    <Text fontSize="xs" color="green.600" mt="1" fontWeight="semibold">
+                        ✓ Hoàn thành tất cả tasks!
+                    </Text>
+                )}
+            </Box>
+        );
+    };
+
     return (
         <Box p="6">
             <Flex align="center" justify="space-between" mb="6">
@@ -227,6 +307,8 @@ const WorkspaceDashboard: React.FC = () => {
                                 Workspace #{b.workspace?.id ?? "?"}
                             </Text>
                             {renderMembers(b.members)}
+                            {/* Thanh tiến trình */}
+                            {renderProgressBar(b. progress, b.status)}
                         </Box>
                     ))
                 }

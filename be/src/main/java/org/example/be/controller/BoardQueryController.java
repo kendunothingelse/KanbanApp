@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/boards")
@@ -40,5 +41,17 @@ public class BoardQueryController {
     @GetMapping("/{boardId}/forecast")
     public BoardForecastDto forecast(@PathVariable Long boardId) {
         return boardQueryService.forecast(boardId);
+    }
+
+    // [NEW] API lấy progress của board (số task done / tổng)
+    @GetMapping("/{boardId}/progress")
+    public Map<String, Integer> progress(@PathVariable Long boardId) {
+        return boardQueryService.getBoardProgress(boardId);
+    }
+
+    // [NEW] API kiểm tra và tự động cập nhật trạng thái board
+    @PostMapping("/{boardId}/check-status")
+    public Board checkAndUpdateStatus(@PathVariable Long boardId) {
+        return boardQueryService.checkAndUpdateBoardStatus(boardId);
     }
 }

@@ -5,8 +5,9 @@ import org.example.be. auth.dto.BoardForecastDto;
 import org. example.be.entity.*;
 import org.example.be.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework. transaction.annotation. Transactional;
 
-import java.time.Duration;
+import java.time. Duration;
 import java. time.LocalDate;
 import java. time.LocalDateTime;
 import java.util.*;
@@ -25,8 +26,8 @@ public class BoardQueryService {
     }
 
     public List<BoardMember> getMembers(Long boardId) {
-        Board b = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
-        return boardMemberRepo. findByBoard(b);
+        Board b = boardRepo. findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
+        return boardMemberRepo.findByBoard(b);
     }
 
     /**
@@ -37,7 +38,7 @@ public class BoardQueryService {
         Board b = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
 
         // Sử dụng query mới với ORDER BY rõ ràng
-        List<CardHistory> histories = cardHistoryRepo.findByBoardOrderByChangeDateDescIdDesc(b);
+        List<CardHistory> histories = cardHistoryRepo. findByBoardOrderByChangeDateDescIdDesc(b);
 
         // Đảm bảo sort thêm một lần nữa ở Java để chắc chắn kết quả đúng
         // Sort theo changeDate DESC, nếu trùng thì theo id DESC
@@ -58,6 +59,48 @@ public class BoardQueryService {
 
     public Board getBoard(Long boardId) {
         return boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
+    }
+
+    // [NEW] Lấy thống kê số task DONE và tổng số task của board
+    public Map<String, Integer> getBoardProgress(Long boardId) {
+        Board b = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
+        List<Card> cards = cardRepo.findByBoard(b);
+
+        int total = cards.size();
+        int doneCount = (int) cards.stream().filter(c -> c.getStatus() == Status.DONE).count();
+
+        Map<String, Integer> result = new HashMap<>();
+        result.put("total", total);
+        result.put("done", doneCount);
+        return result;
+    }
+
+    // [NEW] Kiểm tra và tự động cập nhật trạng thái board nếu tất cả task đều DONE
+    @Transactional
+    public Board checkAndUpdateBoardStatus(Long boardId) {
+        Board b = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
+        List<Card> cards = cardRepo.findByBoard(b);
+
+        // Nếu không có task nào, không tự động chuyển
+        if (cards. isEmpty()) {
+            return b;
+        }
+
+        int total = cards.size();
+        int doneCount = (int) cards.stream().filter(c -> c. getStatus() == Status.DONE).count();
+
+        // Nếu tất cả task đều DONE và board chưa DONE -> tự động chuyển
+        if (doneCount == total && b.getStatus() != BoardStatus.DONE) {
+            b. setStatus(BoardStatus.DONE);
+            boardRepo.save(b);
+        }
+        // Nếu có task chưa DONE nhưng board đang DONE -> chuyển lại IN_PROGRESS
+        else if (doneCount < total && b. getStatus() == BoardStatus.DONE) {
+            b. setStatus(BoardStatus.IN_PROGRESS);
+            boardRepo.save(b);
+        }
+
+        return b;
     }
 
     public BoardForecastDto forecast(Long boardId) {
@@ -90,12 +133,12 @@ public class BoardQueryService {
             }
         }
 
-        double avgCycle = cycleTimes. isEmpty()
+        double avgCycle = cycleTimes.isEmpty()
                 ? 0
                 : cycleTimes.stream().mapToDouble(Double::doubleValue).average().orElse(0);
 
         double avgActualHours = cards.stream()
-                .filter(c -> c. getStatus() == Status.DONE && c.getActualHours() != null)
+                .filter(c -> c.getStatus() == Status.DONE && c.getActualHours() != null)
                 .mapToDouble(Card::getActualHours)
                 .average()
                 .orElse(0);
@@ -106,7 +149,7 @@ public class BoardQueryService {
         double remainingEffortHours = remaining * avgActualHours;
 
         LocalDate estimatedEndDate = remainingTimeDays > 0
-                ?  LocalDate.now().plusDays((long) Math.ceil(remainingTimeDays))
+                ? LocalDate. now().plusDays((long) Math.ceil(remainingTimeDays))
                 : null;
 
         return new BoardForecastDto(

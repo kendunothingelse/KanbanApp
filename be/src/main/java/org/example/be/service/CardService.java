@@ -1,15 +1,15 @@
-package org.example.be.service;
+package org.example.be. service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.be.auth.dto.BoardDto;
-import org.example.be.auth.dto.CardDto;
-import org.example.be.entity.*;
-import org.example.be.repository.*;
+import org. example.be.auth.dto.CardDto;
+import org.example.be. entity.*;
+import org.example.be. repository.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation. Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
+import java.util. Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -30,14 +30,38 @@ public class CardService {
         }
     }
 
+    // [NEW] Kiểm tra và tự động cập nhật trạng thái board
+    private void checkAndUpdateBoardStatus(Board board) {
+        var cards = cardRepo. findByBoard(board);
+
+        // Nếu không có task nào, không tự động chuyển
+        if (cards.isEmpty()) {
+            return;
+        }
+
+        int total = cards. size();
+        int doneCount = (int) cards.stream().filter(c -> c.getStatus() == Status.DONE).count();
+
+        // Nếu tất cả task đều DONE và board chưa DONE -> tự động chuyển
+        if (doneCount == total && board.getStatus() != BoardStatus. DONE) {
+            board.setStatus(BoardStatus.DONE);
+            boardRepo.save(board);
+        }
+        // Nếu có task chưa DONE nhưng board đang DONE -> chuyển lại IN_PROGRESS
+        else if (doneCount < total && board.getStatus() == BoardStatus.DONE) {
+            board.setStatus(BoardStatus.IN_PROGRESS);
+            boardRepo.save(board);
+        }
+    }
+
     @Transactional
-    public Card create(BoardDto.CardCreateRequest req, User current) {
-        Board board = boardRepo.findById(req.boardId())
+    public Card create(BoardDto. CardCreateRequest req, User current) {
+        Board board = boardRepo. findById(req. boardId())
                 .orElseThrow(() -> new RuntimeException("Board not found"));
-        permissionService.check(current, board, Permission.CARD_EDIT);
+        permissionService.check(current, board, Permission. CARD_EDIT);
 
         Status status = Status.valueOf(req.status() == null ? "TODO" : req.status());
-        if (status == Status.IN_PROGRESS) enforceWipLimit(board);
+        if (status == Status. IN_PROGRESS) enforceWipLimit(board);
 
         Card card = Card.builder()
                 .board(board)
@@ -45,12 +69,17 @@ public class CardService {
                 .title(req.title())
                 .description(req.description())
                 .position(req.position())
-                .dueDate(req.dueDate())
+                . dueDate(req. dueDate())
                 .priority(req.priority() == null ? null : Priority.valueOf(req.priority()))
-                .estimateHours(req.estimateHours())
+                .estimateHours(req. estimateHours())
                 .actualHours(req.actualHours())
                 .build();
-        return cardRepo.save(card);
+        Card saved = cardRepo.save(card);
+
+        // [NEW] Kiểm tra và cập nhật trạng thái board sau khi tạo card
+        checkAndUpdateBoardStatus(board);
+
+        return saved;
     }
 
     @Transactional
@@ -62,8 +91,8 @@ public class CardService {
 
         Status oldStatus = card.getStatus();
         if (req.status() != null) {
-            Status newStatus = Status.valueOf(req.status());
-            if (newStatus == Status.IN_PROGRESS && oldStatus != Status.IN_PROGRESS) {
+            Status newStatus = Status.valueOf(req. status());
+            if (newStatus == Status.IN_PROGRESS && oldStatus != Status. IN_PROGRESS) {
                 enforceWipLimit(board);
             }
             card.setStatus(newStatus);
@@ -71,24 +100,28 @@ public class CardService {
 
         card.setTitle(req.title());
         card.setDescription(req.description());
-        card.setPosition(req.position());
+        card.setPosition(req. position());
         card.setDueDate(req.dueDate());
-        card.setPriority(req.priority() == null ? null : Priority.valueOf(req.priority()));
-        card.setEstimateHours(req.estimateHours());
+        card.setPriority(req.priority() == null ? null : Priority.valueOf(req. priority()));
+        card.setEstimateHours(req. estimateHours());
         card.setActualHours(req.actualHours());
 
-        Card saved = cardRepo.save(card);
+        Card saved = cardRepo. save(card);
 
-        // record history on status change OR title/desc change
+        // record history on status change
         if (req.status() != null && oldStatus != saved.getStatus()) {
             cardHistoryRepo.save(CardHistory.builder()
                     .card(saved)
                     .fromStatus(oldStatus)
                     .toStatus(saved.getStatus())
                     .changeDate(LocalDateTime.now())
-                    .actor(current) // NEW
+                    . actor(current)
                     .build());
         }
+
+        // [NEW] Kiểm tra và cập nhật trạng thái board sau khi update card
+        checkAndUpdateBoardStatus(board);
+
         return saved;
     }
 
@@ -96,8 +129,12 @@ public class CardService {
     public void delete(Long id, User current) {
         Card card = cardRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Card not found"));
-        permissionService.check(current, card.getBoard(), Permission.CARD_EDIT);
+        Board board = card.getBoard();
+        permissionService. check(current, board, Permission.CARD_EDIT);
         cardRepo.delete(card);
+
+        // [NEW] Kiểm tra và cập nhật trạng thái board sau khi xóa card
+        checkAndUpdateBoardStatus(board);
     }
 
     @Transactional
@@ -105,22 +142,22 @@ public class CardService {
         Card card = cardRepo.findById(req.cardId())
                 .orElseThrow(() -> new RuntimeException("Card not found"));
         Board board = card.getBoard();
-        permissionService.check(current, board, Permission.CARD_EDIT);
+        permissionService.check(current, board, Permission. CARD_EDIT);
         User u = userRepo.findById(req.userId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        if (!cardAssigneeRepo.existsByCardAndUser(card, u)) {
+        if (! cardAssigneeRepo. existsByCardAndUser(card, u)) {
             cardAssigneeRepo.save(CardAssignee.builder().card(card).user(u).build());
         }
     }
 
     @Transactional
     public Card move(BoardDto.MoveCardRequest req, User current) {
-        Card card = cardRepo.findById(req.cardId())
+        Card card = cardRepo. findById(req. cardId())
                 .orElseThrow(() -> new RuntimeException("Card not found"));
         Board board = card.getBoard();
-        permissionService.check(current, board, Permission.CARD_EDIT);
+        permissionService.check(current, board, Permission. CARD_EDIT);
 
-        Status oldStatus = card.getStatus();
+        Status oldStatus = card. getStatus();
         Status targetStatus = Status.valueOf(req.targetStatus());
 
         if (targetStatus == Status.IN_PROGRESS && oldStatus != Status.IN_PROGRESS) {
@@ -131,9 +168,9 @@ public class CardService {
         card.setPosition(req.targetPosition());
         cardRepo.save(card);
 
-        // reorder positions ...
+        // reorder positions
         var cards = cardRepo.findByBoardAndStatusOrderByPositionAsc(board, targetStatus);
-        cards.sort(Comparator.comparing(Card::getPosition, Comparator.nullsLast(Integer::compareTo)));
+        cards.sort(Comparator. comparing(Card::getPosition, Comparator.nullsLast(Integer::compareTo)));
         int pos = 0;
         for (Card c : cards) c.setPosition(pos++);
         cardRepo.saveAll(cards);
@@ -145,9 +182,13 @@ public class CardService {
                     .fromStatus(oldStatus)
                     .toStatus(targetStatus)
                     .changeDate(LocalDateTime.now())
-                    .actor(current) // NEW
+                    .actor(current)
                     .build());
         }
+
+        // [NEW] Kiểm tra và cập nhật trạng thái board sau khi move card
+        checkAndUpdateBoardStatus(board);
+
         return card;
     }
 }

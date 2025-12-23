@@ -7,31 +7,30 @@ export interface User {
 }
 
 export interface Workspace {
-    id: number;
+    id:  number;
     name: string;
 }
 
-// types.ts
 export interface Board {
-    id: number;
+    id:  number;
     name: string;
     workspace: Workspace;
     status: BoardStatus;
-    createdAt?: string;
+    createdAt?:  string;
     endDate?: string;
-    wipLimit?: number | null; // thêm | null để gán được null
+    wipLimit?: number | null;
 }
 
 export interface Card {
-    id: number;
+    id:  number;
     title: string;
-    description?: string;
+    description?:  string;
     position: number;
     createdAt?: string;
     dueDate?: string;
     priority?: 'LOW' | 'MEDIUM' | 'HIGH';
     status: Status;
-    estimateHours?: number;
+    estimateHours?:  number;
     actualHours?: number;
     board: Board;
 }
@@ -44,10 +43,16 @@ export interface BoardMember {
 }
 
 export interface CardHistory {
-    id: number;
+    id:  number;
     fromStatus: Status;
     toStatus: Status;
     changeDate: string;
     card: Card;
-    actor?: User; // thêm thông tin user đã thao tác
+    actor?:  User;
+}
+
+// [NEW] Interface cho progress của board
+export interface BoardProgress {
+    total: number;
+    done: number;
 }
