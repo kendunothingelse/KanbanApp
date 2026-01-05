@@ -1,57 +1,64 @@
 package org.example.be.service;
 
-import lombok.RequiredArgsConstructor;
-import org.example.be. auth.dto.BoardForecastDto;
-import org. example.be.entity.*;
-import org.example.be.repository.*;
-import org.springframework.stereotype.Service;
-import org.springframework. transaction.annotation. Transactional;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import java.time. Duration;
-import java. time.LocalDate;
-import java. time.LocalDateTime;
-import java.util.*;
+import lombok.RequiredArgsConstructor;
+import org.example.be.auth.dto.BoardForecastDto;
+import org.example.be.entity.Board;
+import org.example.be.entity.BoardMember;
+import org.example.be.entity.BoardStatus;
+import org.example.be.entity.Card;
+import org.example.be.entity.CardHistory;
+import org.example.be.entity.Status;
+import org.example.be.repository.BoardMemberRepository;
+import org.example.be.repository.BoardRepository;
+import org.example.be.repository.CardHistoryRepository;
+import org.example.be.repository.CardRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class BoardQueryService {
+
     private final BoardRepository boardRepo;
     private final CardRepository cardRepo;
     private final BoardMemberRepository boardMemberRepo;
     private final CardHistoryRepository cardHistoryRepo;
 
     public List<Card> getCards(Long boardId) {
-        Board b = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
-        return cardRepo.findByBoard(b);
+        Board board = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
+        return cardRepo.findByBoard(board);
     }
 
     public List<BoardMember> getMembers(Long boardId) {
-        Board b = boardRepo. findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
-        return boardMemberRepo.findByBoard(b);
+        Board board = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
+        return boardMemberRepo.findByBoard(board);
     }
 
     /**
-     * Trả về lịch sử được sắp xếp theo thời gian:  mới nhất lên trên.
+     * Trả về lịch sử được sắp xếp theo thời gian: mới nhất lên trên.
      * Sử dụng query tối ưu từ repository và thêm sort Java để đảm bảo chính xác.
      */
     public List<CardHistory> getHistory(Long boardId) {
-        Board b = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
+        Board board = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
 
-        // Sử dụng query mới với ORDER BY rõ ràng
-        List<CardHistory> histories = cardHistoryRepo. findByBoardOrderByChangeDateDescIdDesc(b);
+        List<CardHistory> histories = cardHistoryRepo.findByBoardOrderByChangeDateDescIdDesc(board);
 
-        // Đảm bảo sort thêm một lần nữa ở Java để chắc chắn kết quả đúng
-        // Sort theo changeDate DESC, nếu trùng thì theo id DESC
-        histories.sort((h1, h2) -> {
-            // So sánh changeDate trước (giảm dần - mới nhất lên trên)
-            int dateCompare = h2.getChangeDate().compareTo(h1.getChangeDate());
+        histories.sort((first, second) -> {
+            int dateCompare = second.getChangeDate().compareTo(first.getChangeDate());
             if (dateCompare != 0) {
                 return dateCompare;
             }
-            // Nếu changeDate giống nhau, so sánh id (giảm dần)
-            Long id1 = h1.getId() != null ? h1.getId() : Long.MIN_VALUE;
-            Long id2 = h2.getId() != null ? h2.getId() : Long.MIN_VALUE;
-            return Long.compare(id2, id1);
+            Long firstId = first.getId() != null ? first.getId() : Long.MIN_VALUE;
+            Long secondId = second.getId() != null ? second.getId() : Long.MIN_VALUE;
+            return Long.compare(secondId, firstId);
         });
 
         return histories;
@@ -63,11 +70,11 @@ public class BoardQueryService {
 
     // [NEW] Lấy thống kê số task DONE và tổng số task của board
     public Map<String, Integer> getBoardProgress(Long boardId) {
-        Board b = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
-        List<Card> cards = cardRepo.findByBoard(b);
+        Board board = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
+        List<Card> cards = cardRepo.findByBoard(board);
 
         int total = cards.size();
-        int doneCount = (int) cards.stream().filter(c -> c.getStatus() == Status.DONE).count();
+        int doneCount = (int) cards.stream().filter(card -> card.getStatus() == Status.DONE).count();
 
         Map<String, Integer> result = new HashMap<>();
         result.put("total", total);
@@ -78,29 +85,25 @@ public class BoardQueryService {
     // [NEW] Kiểm tra và tự động cập nhật trạng thái board nếu tất cả task đều DONE
     @Transactional
     public Board checkAndUpdateBoardStatus(Long boardId) {
-        Board b = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
-        List<Card> cards = cardRepo.findByBoard(b);
+        Board board = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
+        List<Card> cards = cardRepo.findByBoard(board);
 
-        // Nếu không có task nào, không tự động chuyển
-        if (cards. isEmpty()) {
-            return b;
+        if (cards.isEmpty()) {
+            return board;
         }
 
         int total = cards.size();
-        int doneCount = (int) cards.stream().filter(c -> c. getStatus() == Status.DONE).count();
+        int doneCount = (int) cards.stream().filter(card -> card.getStatus() == Status.DONE).count();
 
-        // Nếu tất cả task đều DONE và board chưa DONE -> tự động chuyển
-        if (doneCount == total && b.getStatus() != BoardStatus.DONE) {
-            b. setStatus(BoardStatus.DONE);
-            boardRepo.save(b);
-        }
-        // Nếu có task chưa DONE nhưng board đang DONE -> chuyển lại IN_PROGRESS
-        else if (doneCount < total && b. getStatus() == BoardStatus.DONE) {
-            b. setStatus(BoardStatus.IN_PROGRESS);
-            boardRepo.save(b);
+        if (doneCount == total && board.getStatus() != BoardStatus.DONE) {
+            board.setStatus(BoardStatus.DONE);
+            boardRepo.save(board);
+        } else if (doneCount < total && board.getStatus() == BoardStatus.DONE) {
+            board.setStatus(BoardStatus.IN_PROGRESS);
+            boardRepo.save(board);
         }
 
-        return b;
+        return board;
     }
 
     public BoardForecastDto forecast(Long boardId) {
@@ -108,26 +111,28 @@ public class BoardQueryService {
         List<Card> cards = cardRepo.findByBoard(board);
         List<CardHistory> histories = cardHistoryRepo.findByBoardOrderByChangeDateDescIdDesc(board);
 
-        // earliest DONE per card
-        Map<Long, LocalDateTime> earliestDone = new HashMap<>();
-        for (CardHistory h : histories) {
-            if (h. getToStatus() == Status.DONE) {
-                Long cardId = h. getCard().getId();
-                earliestDone.merge(cardId, h.getChangeDate(), (oldV, newV) -> newV. isBefore(oldV) ? newV : oldV);
+        Map<Long, LocalDateTime> earliestDoneByCard = new HashMap<>();
+        for (CardHistory history : histories) {
+            if (history.getToStatus() == Status.DONE) {
+                Long cardId = history.getCard().getId();
+                earliestDoneByCard.merge(
+                        cardId,
+                        history.getChangeDate(),
+                        (oldValue, newValue) -> newValue.isBefore(oldValue) ? newValue : oldValue
+                );
             }
         }
 
         List<Double> cycleTimes = new ArrayList<>();
         int doneCount = 0;
 
-        for (Card c : cards) {
-            if (c. getStatus() == Status.DONE) {
+        for (Card card : cards) {
+            if (card.getStatus() == Status.DONE) {
                 doneCount++;
-                LocalDateTime createdAt = c. getCreatedAt();
-                LocalDateTime doneAt = earliestDone.get(c.getId());
+                LocalDateTime createdAt = card.getCreatedAt();
+                LocalDateTime doneAt = earliestDoneByCard.get(card.getId());
                 if (createdAt != null && doneAt != null) {
-                    double days = Math.max(0,
-                            Duration.between(createdAt, doneAt).toMillis() / 86_400_000d);
+                    double days = Math.max(0, Duration.between(createdAt, doneAt).toMillis() / 86_400_000d);
                     cycleTimes.add(days);
                 }
             }
@@ -138,7 +143,7 @@ public class BoardQueryService {
                 : cycleTimes.stream().mapToDouble(Double::doubleValue).average().orElse(0);
 
         double avgActualHours = cards.stream()
-                .filter(c -> c.getStatus() == Status.DONE && c.getActualHours() != null)
+                .filter(card -> card.getStatus() == Status.DONE && card.getActualHours() != null)
                 .mapToDouble(Card::getActualHours)
                 .average()
                 .orElse(0);
@@ -149,7 +154,7 @@ public class BoardQueryService {
         double remainingEffortHours = remaining * avgActualHours;
 
         LocalDate estimatedEndDate = remainingTimeDays > 0
-                ? LocalDate. now().plusDays((long) Math.ceil(remainingTimeDays))
+                ? LocalDate.now().plusDays((long) Math.ceil(remainingTimeDays))
                 : null;
 
         return new BoardForecastDto(

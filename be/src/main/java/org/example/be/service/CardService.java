@@ -1,19 +1,24 @@
-package org.example.be. service;
+package org.example.be.service;
+
+import java.time.LocalDateTime;
+import java.util.Comparator;
 
 import lombok.RequiredArgsConstructor;
 import org.example.be.auth.dto.BoardDto;
-import org. example.be.auth.dto.CardDto;
-import org.example.be. entity.*;
-import org.example.be. repository.*;
+import org.example.be.auth.dto.CardDto;
+import org.example.be.entity.*;
+import org.example.be.repository.BoardRepository;
+import org.example.be.repository.CardAssigneeRepository;
+import org.example.be.repository.CardHistoryRepository;
+import org.example.be.repository.CardRepository;
+import org.example.be.repository.UserRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation. Transactional;
-
-import java.time.LocalDateTime;
-import java.util. Comparator;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class CardService {
+
     private final CardRepository cardRepo;
     private final BoardRepository boardRepo;
     private final PermissionService permissionService;
@@ -22,46 +27,45 @@ public class CardService {
     private final CardHistoryRepository cardHistoryRepo;
 
     private void enforceWipLimit(Board board) {
-        Integer wip = board.getWipLimit();
-        if (wip == null || wip <= 0) return;
+        Integer wipLimit = board.getWipLimit();
+        if (wipLimit == null || wipLimit <= 0) {
+            return;
+        }
         int inProgress = cardRepo.findByBoardAndStatusOrderByPositionAsc(board, Status.IN_PROGRESS).size();
-        if (inProgress >= wip) {
+        if (inProgress >= wipLimit) {
             throw new RuntimeException("WIP limit reached for IN_PROGRESS");
         }
     }
 
     // [NEW] Kiểm tra và tự động cập nhật trạng thái board
     private void checkAndUpdateBoardStatus(Board board) {
-        var cards = cardRepo. findByBoard(board);
-
-        // Nếu không có task nào, không tự động chuyển
+        var cards = cardRepo.findByBoard(board);
         if (cards.isEmpty()) {
             return;
         }
 
-        int total = cards. size();
-        int doneCount = (int) cards.stream().filter(c -> c.getStatus() == Status.DONE).count();
+        int total = cards.size();
+        int doneCount = (int) cards.stream().filter(card -> card.getStatus() == Status.DONE).count();
 
-        // Nếu tất cả task đều DONE và board chưa DONE -> tự động chuyển
-        if (doneCount == total && board.getStatus() != BoardStatus. DONE) {
+        if (doneCount == total && board.getStatus() != BoardStatus.DONE) {
             board.setStatus(BoardStatus.DONE);
             boardRepo.save(board);
-        }
-        // Nếu có task chưa DONE nhưng board đang DONE -> chuyển lại IN_PROGRESS
-        else if (doneCount < total && board.getStatus() == BoardStatus.DONE) {
+        } else if (doneCount < total && board.getStatus() == BoardStatus.DONE) {
             board.setStatus(BoardStatus.IN_PROGRESS);
             boardRepo.save(board);
         }
     }
 
     @Transactional
-    public Card create(BoardDto. CardCreateRequest req, User current) {
-        Board board = boardRepo. findById(req. boardId())
+    public Card create(BoardDto.CardCreateRequest req, User currentUser) {
+        Board board = boardRepo.findById(req.boardId())
                 .orElseThrow(() -> new RuntimeException("Board not found"));
-        permissionService.check(current, board, Permission. CARD_EDIT);
+        permissionService.check(currentUser, board, Permission.CARD_EDIT);
 
         Status status = Status.valueOf(req.status() == null ? "TODO" : req.status());
-        if (status == Status. IN_PROGRESS) enforceWipLimit(board);
+        if (status == Status.IN_PROGRESS) {
+            enforceWipLimit(board);
+        }
 
         Card card = Card.builder()
                 .board(board)
@@ -69,30 +73,29 @@ public class CardService {
                 .title(req.title())
                 .description(req.description())
                 .position(req.position())
-                . dueDate(req. dueDate())
+                .dueDate(req.dueDate())
                 .priority(req.priority() == null ? null : Priority.valueOf(req.priority()))
-                .estimateHours(req. estimateHours())
+                .estimateHours(req.estimateHours())
                 .actualHours(req.actualHours())
                 .build();
-        Card saved = cardRepo.save(card);
+        Card savedCard = cardRepo.save(card);
 
-        // [NEW] Kiểm tra và cập nhật trạng thái board sau khi tạo card
         checkAndUpdateBoardStatus(board);
 
-        return saved;
+        return savedCard;
     }
 
     @Transactional
-    public Card update(CardDto.CardUpdateRequest req, User current) {
+    public Card update(CardDto.CardUpdateRequest req, User currentUser) {
         Card card = cardRepo.findById(req.id())
                 .orElseThrow(() -> new RuntimeException("Card not found"));
         Board board = card.getBoard();
-        permissionService.check(current, board, Permission.CARD_EDIT);
+        permissionService.check(currentUser, board, Permission.CARD_EDIT);
 
-        Status oldStatus = card.getStatus();
+        Status previousStatus = card.getStatus();
         if (req.status() != null) {
-            Status newStatus = Status.valueOf(req. status());
-            if (newStatus == Status.IN_PROGRESS && oldStatus != Status. IN_PROGRESS) {
+            Status newStatus = Status.valueOf(req.status());
+            if (newStatus == Status.IN_PROGRESS && previousStatus != Status.IN_PROGRESS) {
                 enforceWipLimit(board);
             }
             card.setStatus(newStatus);
@@ -100,67 +103,68 @@ public class CardService {
 
         card.setTitle(req.title());
         card.setDescription(req.description());
-        card.setPosition(req. position());
+        card.setPosition(req.position());
         card.setDueDate(req.dueDate());
-        card.setPriority(req.priority() == null ? null : Priority.valueOf(req. priority()));
-        card.setEstimateHours(req. estimateHours());
+        card.setPriority(req.priority() == null ? null : Priority.valueOf(req.priority()));
+        card.setEstimateHours(req.estimateHours());
         card.setActualHours(req.actualHours());
 
-        Card saved = cardRepo. save(card);
+        Card savedCard = cardRepo.save(card);
 
-        // record history on status change
-        if (req.status() != null && oldStatus != saved.getStatus()) {
-            cardHistoryRepo.save(CardHistory.builder()
-                    .card(saved)
-                    .fromStatus(oldStatus)
-                    .toStatus(saved.getStatus())
-                    .changeDate(LocalDateTime.now())
-                    . actor(current)
-                    .build());
+        if (req.status() != null && previousStatus != savedCard.getStatus()) {
+            cardHistoryRepo.save(
+                    CardHistory.builder()
+                            .card(savedCard)
+                            .fromStatus(previousStatus)
+                            .toStatus(savedCard.getStatus())
+                            .changeDate(LocalDateTime.now())
+                            .actor(currentUser)
+                            .build()
+            );
         }
 
-        // [NEW] Kiểm tra và cập nhật trạng thái board sau khi update card
         checkAndUpdateBoardStatus(board);
 
-        return saved;
+
+        return savedCard;
     }
 
     @Transactional
-    public void delete(Long id, User current) {
+    public void delete(Long id, User currentUser) {
         Card card = cardRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Card not found"));
         Board board = card.getBoard();
-        permissionService. check(current, board, Permission.CARD_EDIT);
+        permissionService.check(currentUser, board, Permission.CARD_EDIT);
         cardRepo.delete(card);
 
-        // [NEW] Kiểm tra và cập nhật trạng thái board sau khi xóa card
         checkAndUpdateBoardStatus(board);
     }
 
     @Transactional
-    public void assign(BoardDto.CardAssignRequest req, User current) {
+    public void assign(BoardDto.CardAssignRequest req, User currentUser) {
         Card card = cardRepo.findById(req.cardId())
                 .orElseThrow(() -> new RuntimeException("Card not found"));
         Board board = card.getBoard();
-        permissionService.check(current, board, Permission. CARD_EDIT);
-        User u = userRepo.findById(req.userId())
+        permissionService.check(currentUser, board, Permission.CARD_EDIT);
+
+        User assignee = userRepo.findById(req.userId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        if (! cardAssigneeRepo. existsByCardAndUser(card, u)) {
-            cardAssigneeRepo.save(CardAssignee.builder().card(card).user(u).build());
+        if (!cardAssigneeRepo.existsByCardAndUser(card, assignee)) {
+            cardAssigneeRepo.save(CardAssignee.builder().card(card).user(assignee).build());
         }
     }
 
     @Transactional
-    public Card move(BoardDto.MoveCardRequest req, User current) {
-        Card card = cardRepo. findById(req. cardId())
+    public Card move(BoardDto.MoveCardRequest req, User currentUser) {
+        Card card = cardRepo.findById(req.cardId())
                 .orElseThrow(() -> new RuntimeException("Card not found"));
         Board board = card.getBoard();
-        permissionService.check(current, board, Permission. CARD_EDIT);
+        permissionService.check(currentUser, board, Permission.CARD_EDIT);
 
-        Status oldStatus = card. getStatus();
+        Status previousStatus = card.getStatus();
         Status targetStatus = Status.valueOf(req.targetStatus());
 
-        if (targetStatus == Status.IN_PROGRESS && oldStatus != Status.IN_PROGRESS) {
+        if (targetStatus == Status.IN_PROGRESS && previousStatus != Status.IN_PROGRESS) {
             enforceWipLimit(board);
         }
 
@@ -168,25 +172,26 @@ public class CardService {
         card.setPosition(req.targetPosition());
         cardRepo.save(card);
 
-        // reorder positions
         var cards = cardRepo.findByBoardAndStatusOrderByPositionAsc(board, targetStatus);
-        cards.sort(Comparator. comparing(Card::getPosition, Comparator.nullsLast(Integer::compareTo)));
-        int pos = 0;
-        for (Card c : cards) c.setPosition(pos++);
+        cards.sort(Comparator.comparing(Card::getPosition, Comparator.nullsLast(Integer::compareTo)));
+        int position = 0;
+        for (Card c : cards) {
+            c.setPosition(position++);
+        }
         cardRepo.saveAll(cards);
 
-        // record history when status changes
-        if (oldStatus != targetStatus) {
-            cardHistoryRepo.save(CardHistory.builder()
-                    .card(card)
-                    .fromStatus(oldStatus)
-                    .toStatus(targetStatus)
-                    .changeDate(LocalDateTime.now())
-                    .actor(current)
-                    .build());
+        if (previousStatus != targetStatus) {
+            cardHistoryRepo.save(
+                    CardHistory.builder()
+                            .card(card)
+                            .fromStatus(previousStatus)
+                            .toStatus(targetStatus)
+                            .changeDate(LocalDateTime.now())
+                            .actor(currentUser)
+                            .build()
+            );
         }
 
-        // [NEW] Kiểm tra và cập nhật trạng thái board sau khi move card
         checkAndUpdateBoardStatus(board);
 
         return card;

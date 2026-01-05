@@ -1,16 +1,17 @@
 package org.example.be.repository;
 
-import org.example.be.entity.CardHistory;
-import org. example.be.entity.Board;
-import org. springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data. jpa.repository. Query;
-import org.springframework.data. repository.query. Param;
-import org.springframework.stereotype. Repository;
-
 import java.util.List;
+
+import org.example.be.entity.Board;
+import org.example.be.entity.CardHistory;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CardHistoryRepository extends JpaRepository<CardHistory, Long> {
+
     /**
      * Lấy lịch sử của tất cả card thuộc board, sắp xếp theo:
      * 1. changeDate giảm dần (mới nhất lên trên)

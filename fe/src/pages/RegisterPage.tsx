@@ -1,42 +1,51 @@
 import React, { useState } from "react";
-import {Box, Button, Heading, HStack, Input, Link, Stack, Text, useToast} from "@chakra-ui/react";
+import { Box, Button, Typography, Stack, TextField, Link } from "@mui/material";
 import api from "../api";
-import {Link as RouterLink, useNavigate} from "react-router-dom";
+import { useNavigate, Link as RouterLink } from "react-router-dom";
 
 const RegisterPage: React.FC = () => {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
-    const toast = useToast();
     const nav = useNavigate();
 
     const onSubmit = async () => {
         setLoading(true);
         try {
             await api.post("/auth/register", { username, password });
-            toast({ status: "success", title: "Đăng ký thành công", description: "Hãy đăng nhập" });
+            alert("Đăng ký thành công, hãy đăng nhập");
             nav("/login");
         } catch (e: any) {
-            toast({ status: "error", title: "Đăng ký thất bại", description: e?.response?.data || e.message });
+            alert(e?.response?.data || e.message || "Đăng ký thất bại");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Box maxW="md" mx="auto" mt="24">
-            <Heading mb="6">Đăng ký</Heading>
-            <Stack spacing="4">
-                <Input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
-                <Input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-                <Button isLoading={loading} onClick={onSubmit} colorScheme="blue">Đăng ký</Button>
+        <Box maxWidth="400px" mx="auto" mt={12}>
+            <Typography variant="h4" mb={3}>
+                Đăng ký
+            </Typography>
+            <Stack spacing={2.5}>
+                <TextField label="Username" value={username} onChange={(e) => setUsername(e.target.value)} fullWidth />
+                <TextField
+                    label="Password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    fullWidth
+                />
+                <Button variant="contained" onClick={onSubmit} disabled={loading}>
+                    Đăng ký
+                </Button>
             </Stack>
-            <HStack>
-                <Text>Bạn đã có tài khoản?</Text>
-                <Link as={RouterLink} to="/login" color="blue.500">
+            <Stack direction="row" spacing={1} mt={2}>
+                <Typography>Bạn đã có tài khoản?</Typography>
+                <Link component={RouterLink} to="/login">
                     Đăng nhập
                 </Link>
-            </HStack>
+            </Stack>
         </Box>
     );
 };

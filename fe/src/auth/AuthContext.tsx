@@ -10,41 +10,47 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const STORAGE_KEYS = {
+    token: "token",
+    username: "username",
+};
+
+const persistAuth = (token: string | null, username: string | null) => {
+    if (token && username) {
+        localStorage.setItem(STORAGE_KEYS.token, token);
+        localStorage.setItem(STORAGE_KEYS.username, username);
+        return;
+    }
+    localStorage.removeItem(STORAGE_KEYS.token);
+    localStorage.removeItem(STORAGE_KEYS.username);
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [token, setToken] = useState<string | null>(() => localStorage.getItem("token"));
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem(STORAGE_KEYS.token));
     const [user, setUser] = useState<{ username: string } | null>(() => {
-        const u = localStorage.getItem("username");
-        return u ? { username: u } : null;
+        const saved = localStorage.getItem(STORAGE_KEYS.username);
+        return saved ? { username: saved } : null;
     });
 
     useEffect(() => {
-        if (token && user) {
-            localStorage.setItem("token", token);
-            localStorage.setItem("username", user.username);
-        }
+        persistAuth(token, user?.username ?? null);
     }, [token, user]);
 
     const login = async (username: string, password: string) => {
         const res = await api.post("/auth/login", { username, password });
-        const t = res.data.token as string;
-        setToken(t);
+        const newToken = res.data.token as string;
+        setToken(newToken);
         setUser({ username });
-        localStorage.setItem("token", t);
-        localStorage.setItem("username", username);
+        persistAuth(newToken, username);
     };
 
     const logout = () => {
         setToken(null);
         setUser(null);
-        localStorage.removeItem("token");
-        localStorage.removeItem("username");
+        persistAuth(null, null);
     };
 
-    return (
-        <AuthContext.Provider value={{ user, token, login, logout }}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={{ user, token, login, logout }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

@@ -1,16 +1,19 @@
 import React from "react";
-import { ChakraProvider } from "@chakra-ui/react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider, CssBaseline, createTheme } from "@mui/material";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
+import BoardPage from "./pages/BoardPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import WorkspaceDashboard from "./pages/WorkspaceDashboard";
-import BoardPage from "./pages/BoardPage";
 
-function App() {
+const theme = createTheme();
+
+const App = () => {
     return (
-        <ChakraProvider>
+        <ThemeProvider theme={theme}>
+            <CssBaseline />
             <AuthProvider>
                 <BrowserRouter>
                     <Routes>
@@ -36,8 +39,8 @@ function App() {
                     </Routes>
                 </BrowserRouter>
             </AuthProvider>
-        </ChakraProvider>
+        </ThemeProvider>
     );
-}
+};
 
 export default App;

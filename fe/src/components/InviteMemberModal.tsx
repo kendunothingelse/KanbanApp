@@ -1,23 +1,19 @@
 import React, { useEffect, useState } from "react";
 import {
     Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     FormControl,
-    FormLabel,
-    Input,
-    Modal,
-    ModalBody,
-    ModalCloseButton,
-    ModalContent,
-    ModalFooter,
-    ModalHeader,
-    ModalOverlay,
+    InputLabel,
+    MenuItem,
     Select,
     Stack,
-    Text,
+    TextField,
     Box,
-    VStack,
-    useToast,
-} from "@chakra-ui/react";
+    Typography,
+} from "@mui/material";
 import api from "../api";
 
 type UserSuggestion = { id: number; username: string };
@@ -28,7 +24,7 @@ type Props = {
     boardId: number;
     onInvited: () => void;
     defaultRole?: string;
-    allowedRoles?: string[]; // mới: giới hạn quyền có thể mời
+    allowedRoles?: string[];
 };
 
 const InviteMemberModal: React.FC<Props> = ({
@@ -44,13 +40,9 @@ const InviteMemberModal: React.FC<Props> = ({
     const [role, setRole] = useState(defaultRole);
     const [loading, setLoading] = useState(false);
     const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
-    const toast = useToast();
 
-    // Đồng bộ role mặc định theo allowedRoles khi props thay đổi
     useEffect(() => {
-        if (!allowedRoles.includes(role)) {
-            setRole(allowedRoles[0]);
-        }
+        if (!allowedRoles.includes(role)) setRole(allowedRoles[0]);
     }, [allowedRoles, role]);
 
     useEffect(() => {
@@ -75,11 +67,11 @@ const InviteMemberModal: React.FC<Props> = ({
 
     const invite = async () => {
         if (!boardId || boardId <= 0) {
-            toast({ status: "warning", title: "Thiếu boardId hợp lệ" });
+            alert("Thiếu boardId hợp lệ");
             return;
         }
         if (!selectedUser) {
-            toast({ status: "warning", title: "Chọn user để mời" });
+            alert("Chọn user để mời");
             return;
         }
         setLoading(true);
@@ -89,18 +81,14 @@ const InviteMemberModal: React.FC<Props> = ({
                 userId: selectedUser.id,
                 role,
             });
-            toast({ status: "success", title: "Mời thành viên thành công" });
+            alert("Mời thành viên thành công");
             onInvited();
             onClose();
             setQuery("");
             setSelectedUser(null);
             setSuggestions([]);
         } catch (e: any) {
-            toast({
-                status: "error",
-                title: "Mời thất bại",
-                description: e?.response?.data || e.message,
-            });
+            alert(e?.response?.data || e.message || "Mời thất bại");
         } finally {
             setLoading(false);
         }
@@ -109,71 +97,71 @@ const InviteMemberModal: React.FC<Props> = ({
     const showNoResult = query.length > 0 && suggestions.length === 0;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose}>
-            <ModalOverlay />
-            <ModalContent>
-                <ModalHeader>Mời thành viên</ModalHeader>
-                <ModalCloseButton />
-                <ModalBody>
-                    <Stack spacing="3">
-                        <FormControl>
-                            <FormLabel>Username (gợi ý tối đa 4)</FormLabel>
-                            <Input
-                                placeholder="Nhập chữ cái đầu"
-                                value={query}
-                                onChange={(e) => {
-                                    setQuery(e.target.value);
-                                    setSelectedUser(null);
-                                }}
-                            />
-                            {query && (
-                                <Box borderWidth="1px" borderRadius="md" mt="2" maxH="150px" overflowY="auto">
-                                    <VStack align="stretch" spacing="0">
-                                        {suggestions.map((s) => (
-                                            <Box
-                                                key={s.id}
-                                                px="3"
-                                                py="2"
-                                                _hover={{ bg: "gray.100", cursor: "pointer" }}
-                                                onClick={() => {
-                                                    setSelectedUser(s);
-                                                    setQuery(s.username);
-                                                }}
-                                            >
-                                                {s.username}
-                                            </Box>
-                                        ))}
-                                        {showNoResult && (
-                                            <Text px="3" py="2" color="red.500">
-                                                Không tìm được tên username tương tự
-                                            </Text>
-                                        )}
-                                    </VStack>
-                                </Box>
-                            )}
-                        </FormControl>
-                        <FormControl>
-                            <FormLabel>Role</FormLabel>
-                            <Select value={role} onChange={(e) => setRole(e.target.value)}>
-                                {allowedRoles.map((r) => (
-                                    <option key={r} value={r}>
-                                        {r}
-                                    </option>
+        <Dialog open={isOpen} onClose={onClose} fullWidth maxWidth="sm">
+            <DialogTitle>Mời thành viên</DialogTitle>
+            <DialogContent dividers>
+                <Stack spacing={2} mt={1}>
+                    <Box>
+                        <TextField
+                            fullWidth
+                            label="Username (gợi ý tối đa 4)"
+                            placeholder="Nhập chữ cái đầu"
+                            value={query}
+                            onChange={(e) => {
+                                setQuery(e.target.value);
+                                setSelectedUser(null);
+                            }}
+                        />
+                        {query && (
+                            <Box
+                                border={1}
+                                borderColor="grey.300"
+                                borderRadius={1}
+                                mt={1}
+                                maxHeight={150}
+                                overflow="auto"
+                            >
+                                {suggestions.map((s) => (
+                                    <Box
+                                        key={s.id}
+                                        px={2}
+                                        py={1}
+                                        sx={{ cursor: "pointer", "&:hover": { bgcolor: "grey.100" } }}
+                                        onClick={() => {
+                                            setSelectedUser(s);
+                                            setQuery(s.username);
+                                        }}
+                                    >
+                                        {s.username}
+                                    </Box>
                                 ))}
-                            </Select>
-                        </FormControl>
-                    </Stack>
-                </ModalBody>
-                <ModalFooter>
-                    <Button mr={3} onClick={onClose}>
-                        Hủy
-                    </Button>
-                    <Button colorScheme="blue" onClick={invite} isDisabled={!selectedUser} isLoading={loading}>
-                        Mời
-                    </Button>
-                </ModalFooter>
-            </ModalContent>
-        </Modal>
+                                {showNoResult && (
+                                    <Typography px={2} py={1} color="error">
+                                        Không tìm được tên username tương tự
+                                    </Typography>
+                                )}
+                            </Box>
+                        )}
+                    </Box>
+                    <FormControl fullWidth>
+                        <InputLabel>Role</InputLabel>
+                        <Select value={role} label="Role" onChange={(e) => setRole(e.target.value)}>
+                            {allowedRoles.map((r) => (
+                                <MenuItem key={r} value={r}>
+                                    {r}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </Stack>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Hủy</Button>
+                <Button onClick={invite} variant="contained" disabled={!selectedUser || loading}>
+                    Mời
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 };
 

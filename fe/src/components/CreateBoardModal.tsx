@@ -1,8 +1,19 @@
 import React, { useEffect, useState } from "react";
 import {
-    Button, FormControl, FormLabel, Input, Modal, ModalBody, ModalCloseButton,
-    ModalContent, ModalFooter, ModalHeader, ModalOverlay, Stack, Select, useToast, Box, VStack, Text
-} from "@chakra-ui/react";
+    Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    FormControl,
+    InputLabel,
+    MenuItem,
+    Select,
+    Stack,
+    TextField,
+    Typography,
+} from "@mui/material";
 import api from "../api";
 
 type Props = {
@@ -12,14 +23,13 @@ type Props = {
     onCreated: () => void;
 };
 
-const roles = ["ADMIN", "MEMBER", "VIEWER"];
 type UserSuggestion = { id: number; username: string };
+const ROLES = ["ADMIN", "MEMBER", "VIEWER"];
 
-const CreateBoardModal: React.FC<Props> = ({ isOpen, onClose, workspaceId, onCreated }) => {
+export const CreateBoardModal: React.FC<Props> = ({ isOpen, onClose, workspaceId, onCreated }) => {
+    const [loading, setLoading] = useState(false);
     const [name, setName] = useState("");
     const [role, setRole] = useState<string>("MEMBER");
-    const toast = useToast();
-    const [loading, setLoading] = useState(false);
 
     const [query, setQuery] = useState("");
     const [selectedUser, setSelectedUser] = useState<UserSuggestion | null>(null);
@@ -27,8 +37,11 @@ const CreateBoardModal: React.FC<Props> = ({ isOpen, onClose, workspaceId, onCre
 
     useEffect(() => {
         let ignore = false;
-        const run = async () => {
-            if (!query) { setSuggestions([]); return; }
+        const fetchSuggestions = async () => {
+            if (!query) {
+                setSuggestions([]);
+                return;
+            }
             try {
                 const res = await api.get(`/users/search?prefix=${encodeURIComponent(query)}`);
                 if (!ignore) setSuggestions(res.data.slice(0, 4));
@@ -36,19 +49,22 @@ const CreateBoardModal: React.FC<Props> = ({ isOpen, onClose, workspaceId, onCre
                 if (!ignore) setSuggestions([]);
             }
         };
-        run();
-        return () => { ignore = true; };
+        fetchSuggestions();
+        return () => {
+            ignore = true;
+        };
     }, [query]);
 
     const createBoard = async () => {
         if (workspaceId <= 0) {
-            toast({ status: "warning", title: "Chưa chọn workspace hợp lệ" });
+            alert("Chưa chọn workspace hợp lệ");
             return;
         }
-        if (!name) {
-            toast({ status: "warning", title: "Vui lòng nhập tên board" });
+        if (!name.trim()) {
+            alert("Vui lòng nhập tên board");
             return;
         }
+
         setLoading(true);
         try {
             const res = await api.post("/boards", { name, workspaceId });
@@ -56,15 +72,15 @@ const CreateBoardModal: React.FC<Props> = ({ isOpen, onClose, workspaceId, onCre
             if (selectedUser) {
                 await api.post("/boards/invite", { boardId, userId: selectedUser.id, role });
             }
-            toast({ status: "success", title: "Tạo board thành công" });
+            alert("Tạo board thành công");
             onCreated();
             onClose();
             setName("");
             setQuery("");
             setSelectedUser(null);
             setSuggestions([]);
-        } catch (e: any) {
-            toast({ status: "error", title: "Lỗi", description: e?.response?.data || e.message });
+        } catch (error: any) {
+            alert(error?.response?.data || error.message || "Lỗi");
         } finally {
             setLoading(false);
         }
@@ -73,59 +89,84 @@ const CreateBoardModal: React.FC<Props> = ({ isOpen, onClose, workspaceId, onCre
     const showNoResult = query.length > 0 && suggestions.length === 0;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose}>
-            <ModalOverlay />
-            <ModalContent>
-                <ModalHeader>Tạo board mới</ModalHeader>
-                <ModalCloseButton />
-                <ModalBody>
-                    <Stack spacing="3">
-                        <FormControl isRequired>
-                            <FormLabel>Tên board</FormLabel>
-                            <Input value={name} onChange={(e) => setName(e.target.value)} />
-                        </FormControl>
-                        <FormControl>
-                            <FormLabel>Thêm thành viên (tùy chọn, gõ để gợi ý)</FormLabel>
-                            <Input
-                                placeholder="Nhập chữ cái đầu"
-                                value={query}
-                                onChange={(e) => { setQuery(e.target.value); setSelectedUser(null); }}
-                            />
-                            {query && (
-                                <Box borderWidth="1px" borderRadius="md" mt="2" maxH="150px" overflowY="auto">
-                                    <VStack align="stretch" spacing="0">
-                                        {suggestions.map(s => (
-                                            <Box
-                                                key={s.id}
-                                                px="3" py="2" _hover={{ bg: "gray.100", cursor: "pointer" }}
-                                                onClick={() => { setSelectedUser(s); setQuery(s.username); }}
-                                            >
-                                                {s.username}
-                                            </Box>
-                                        ))}
-                                        {showNoResult && (
-                                            <Text px="3" py="2" color="red.500">Không tìm được tên username tương tự</Text>
-                                        )}
-                                    </VStack>
-                                </Box>
-                            )}
-                        </FormControl>
-                        {selectedUser && (
-                            <FormControl>
-                                <FormLabel>Role</FormLabel>
-                                <Select value={role} onChange={(e) => setRole(e.target.value)}>
-                                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
-                                </Select>
-                            </FormControl>
+        <Dialog open={isOpen} onClose={onClose} fullWidth maxWidth="sm">
+            <DialogTitle>Tạo board mới</DialogTitle>
+            <DialogContent dividers>
+                <Stack spacing={2} mt={1}>
+                    <TextField
+                        label="Tên board"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        fullWidth
+                    />
+
+                    <Box>
+                        <TextField
+                            fullWidth
+                            label="Thêm thành viên (tùy chọn, gõ để gợi ý)"
+                            placeholder="Nhập chữ cái đầu"
+                            value={query}
+                            onChange={(e) => {
+                                setQuery(e.target.value);
+                                setSelectedUser(null);
+                            }}
+                        />
+                        {query && (
+                            <Box
+                                border={1}
+                                borderColor="grey.300"
+                                borderRadius={1}
+                                mt={1}
+                                maxHeight={150}
+                                overflow="auto"
+                            >
+                                <Stack spacing={0}>
+                                    {suggestions.map((s) => (
+                                        <Box
+                                            key={s.id}
+                                            px={2}
+                                            py={1}
+                                            sx={{ cursor: "pointer", "&:hover": { bgcolor: "grey.100" } }}
+                                            onClick={() => {
+                                                setSelectedUser(s);
+                                                setQuery(s.username);
+                                            }}
+                                        >
+                                            {s.username}
+                                        </Box>
+                                    ))}
+                                    {showNoResult && (
+                                        <Typography px={2} py={1} color="error">
+                                            Không tìm được tên username tương tự
+                                        </Typography>
+                                    )}
+                                </Stack>
+                            </Box>
                         )}
-                    </Stack>
-                </ModalBody>
-                <ModalFooter>
-                    <Button mr={3} onClick={onClose} variant="ghost">Hủy</Button>
-                    <Button colorScheme="blue" onClick={createBoard} isLoading={loading}>Tạo</Button>
-                </ModalFooter>
-            </ModalContent>
-        </Modal>
+                    </Box>
+
+                    {selectedUser && (
+                        <FormControl fullWidth>
+                            <InputLabel>Role</InputLabel>
+                            <Select value={role} label="Role" onChange={(e) => setRole(e.target.value)}>
+                                {ROLES.map((r) => (
+                                    <MenuItem key={r} value={r}>
+                                        {r}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    )}
+                </Stack>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Hủy</Button>
+                <Button onClick={createBoard} variant="contained" disabled={loading}>
+                    Tạo
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 };
 
