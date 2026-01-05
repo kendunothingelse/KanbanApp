@@ -7,16 +7,16 @@ export interface User {
 }
 
 export interface Workspace {
-    id:  number;
+    id: number;
     name: string;
 }
 
 export interface Board {
     id: number;
-    name:  string;
+    name: string;
     workspace: Workspace;
     status: BoardStatus;
-    createdAt?:  string;
+    createdAt?: string;
     endDate?: string;
     wipLimit?: number | null;
 }
@@ -28,15 +28,15 @@ export interface Card {
     position: number;
     createdAt?: string;
     dueDate?: string;
-    priority?:  'LOW' | 'MEDIUM' | 'HIGH';
+    priority?: 'LOW' | 'MEDIUM' | 'HIGH';
     status: Status;
-    estimateHours?:  number;
+    estimateHours?: number;
     actualHours?: number;
     board: Board;
 }
 
 export interface BoardMember {
-    id:  number;
+    id: number;
     user: User;
     board: Board;
     role: 'ADMIN' | 'MEMBER' | 'VIEWER';
@@ -48,7 +48,7 @@ export interface CardHistory {
     toStatus: Status;
     changeDate: string;
     card: Card;
-    actor?:  User;
+    actor?: User;
 }
 
 export interface BoardProgress {
@@ -86,10 +86,10 @@ export interface BurndownResponse {
     burndownData: BurndownPoint[];      // Dữ liệu cho biểu đồ Burndown
     velocityData: WeeklyVelocity[];     // Dữ liệu cho biểu đồ Velocity
     averageVelocity: number;            // Velocity trung bình (points/tuần)
-    totalPoints:  number;                // Tổng story points của dự án
+    totalPoints: number;                // Tổng story points của dự án
     completedPoints: number;            // Story points đã hoàn thành
     remainingPoints: number;            // Story points còn lại
-    estimatedEndDate:  string | null;    // Ngày dự kiến hoàn thành
+    estimatedEndDate: string | null;    // Ngày dự kiến hoàn thành
     projectDeadline: string | null;     // Deadline của dự án
     daysAheadOrBehind: number | null;   // Số ngày sớm (+) hoặc trễ (-)
     projectHealth: 'ON_TRACK' | 'AT_RISK' | 'DELAYED'; // Trạng thái dự án

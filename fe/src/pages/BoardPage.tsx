@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {
     Avatar,
     Box,
@@ -32,17 +32,38 @@ import {
     useSensor,
     useSensors,
 } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip as RTooltip, Legend, Line, ReferenceLine, Area } from "recharts";
-import { useNavigate, useParams } from "react-router-dom";
+import {SortableContext, verticalListSortingStrategy} from "@dnd-kit/sortable";
+import {
+    ResponsiveContainer,
+    LineChart,
+    CartesianGrid,
+    XAxis,
+    YAxis,
+    Tooltip as RTooltip,
+    Legend,
+    Line,
+    ReferenceLine,
+    Area,
+    Bar, BarChart
+} from "recharts";
+import {useNavigate, useParams} from "react-router-dom";
 import api from "../api";
-import { useAuth } from "../auth/AuthContext";
+import {useAuth} from "../auth/AuthContext";
 import InviteMemberModal from "../components/InviteMemberModal";
 import CardItem from "../components/board/CardItem";
 import DroppableColumn from "../components/board/DroppableColumn";
-import { getAvatarColor, getAvatarColorDifferent } from "../utils/avatarColor";
-import { formatToUtc7 } from "../utils/date";
-import { Board, BoardMember, Card as CardType, CardHistory, Status } from "../types";
+import {getAvatarColor, getAvatarColorDifferent} from "../utils/avatarColor";
+import {formatToUtc7} from "../utils/date";
+import {
+    Board,
+    BoardMember,
+    BurndownPoint,
+    BurndownResponse,
+    Card as CardType,
+    CardHistory,
+    Status,
+    WeeklyVelocity
+} from "../types";
 
 const STATUSES: Status[] = ["TODO", "IN_PROGRESS", "DONE"];
 
@@ -57,17 +78,11 @@ type Forecast = {
     estimatedEndDate: string | null;
 };
 
-// NEW: điểm burndown
-type BurndownPoint = {
-    date: string; // yyyy-MM-dd
-    remaining: number;
-    ideal: number;
-};
 
 const BoardPage: React.FC = () => {
-    const { boardId } = useParams<{ boardId: string }>();
+    const {boardId} = useParams<{ boardId: string }>();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const {user} = useAuth();
 
     const [board, setBoard] = useState<Board | null>(null);
     const [cards, setCards] = useState<CardType[]>([]);
@@ -88,15 +103,28 @@ const BoardPage: React.FC = () => {
     const [inviteOpen, setInviteOpen] = useState(false);
     const [boardEditOpen, setBoardEditOpen] = useState(false);
     const [tab, setTab] = useState(0);
+    const [velocityMonthIndex, setVelocityMonthIndex] = useState(0);//phân trang Velocity theo tháng
+
+    // NEW: Burndown/Velocity từ backend
+    const [burndownData, setBurndownData] = useState<BurndownPoint[]>([]);
+    const [velocityData, setVelocityData] = useState<WeeklyVelocity[]>([]);
+    const [averageVelocity, setAverageVelocity] = useState(0);
+    const [burndownLoading, setBurndownLoading] = useState(false);
+    const [burndownError, setBurndownError] = useState<string | null>(null);
+    const [remainingPoints, setRemainingPoints] = useState(0);
+    const [totalPoints, setTotalPoints] = useState(0);
+    const [estimatedEndDate, setEstimatedEndDate] = useState<string | null>(null);
+    const [projectDeadline, setProjectDeadline] = useState<string | null>(null);
+    const [projectHealth, setProjectHealth] = useState<string | null>(null);
 
     const mainColor = getAvatarColor(user?.username);
     const sensors = useSensors(
         useSensor(PointerSensor, {
-            activationConstraint: { distance: 5 },
+            activationConstraint: {distance: 5},
         })
     );
 
-    // ================== Load data ==================
+    // ================Load data ======================================
     const loadBoard = async () => {
         const res = await api.get(`/boards/${boardId}`);
         setBoard(res.data);
@@ -134,8 +162,36 @@ const BoardPage: React.FC = () => {
         }
     };
 
+    const loadBurndownVelocity = async () => {
+        setBurndownLoading(true);
+        setBurndownError(null);
+        try {
+            const res = await api.get<BurndownResponse>(`/boards/${boardId}/burndown`);
+            setBurndownData(res.data.burndownData || null);
+            setVelocityData(res.data.velocityData || []);
+            setAverageVelocity(res.data.averageVelocity || 0);
+            setRemainingPoints(res.data.remainingPoints || 0);
+            setTotalPoints(res.data.totalPoints || 0);
+            setEstimatedEndDate(res.data.estimatedEndDate || null);
+            setProjectDeadline(res.data.projectDeadline || null);
+            setProjectHealth(res.data.projectHealth || null);
+        } catch (error: any) {
+            setBurndownError(error?.response?.data || error.message || "Không tải được burndown/velocity");
+        } finally {
+            setBurndownLoading(false);
+        }
+    };
+
+    const refreshSnapshot = async () => {
+        try {
+            await api.post(`/boards/${boardId}/snapshot/refresh`);
+        } catch {
+            // bỏ qua để không chặn UI
+        }
+    };
+
     const loadAll = async () => {
-        await Promise.all([loadBoard(), loadCards(), loadMembers(), loadHistories(), loadForecast()]);
+        await Promise.all([loadBoard(), loadCards(), loadMembers(), loadHistories(), loadForecast(), loadBurndownVelocity()]);
     };
 
     useEffect(() => {
@@ -158,104 +214,58 @@ const BoardPage: React.FC = () => {
         loadAll();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [boardId]);
+// Reset về tháng đầu khi đổi dữ liệu velocity
+    useEffect(() => {
+        setVelocityMonthIndex(0);
+    }, [velocityData]);
+// Nhóm velocity theo tháng (dựa trên weekStart)
+    const velocityMonths = useMemo(() => {
+        const map = new Map<
+            string,
+            {
+                label: string;
+                weeks: WeeklyVelocity[];
+                sortKey: number;
+            }
+        >();
 
+        velocityData.forEach((w) => {
+            const d = new Date(w.weekStart);
+            const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+            const label = d.toLocaleDateString("vi-VN", {month: "long", year: "numeric"});
+            const sortKey = d.getFullYear() * 100 + (d.getMonth() + 1);
+            if (!map.has(key)) {
+                map.set(key, {label, weeks: [], sortKey});
+            }
+            map.get(key)!.weeks.push(w);
+        });
+
+        // Sắp xếp tháng mới nhất lên trước
+        return Array.from(map.values()).sort((a, b) => b.sortKey - a.sortKey);
+    }, [velocityData]);
+
+    const currentVelocityWeeks =
+        velocityMonths.length && velocityMonthIndex >= 0 && velocityMonthIndex < velocityMonths.length
+            ? velocityMonths[velocityMonthIndex].weeks : [];
+
+    const currentVelocityMonthLabel =
+        velocityMonths.length && velocityMonthIndex >= 0 && velocityMonthIndex < velocityMonths.length
+            ? velocityMonths[velocityMonthIndex].label : "";
     const cardsByStatus = useMemo(() => {
-        const map: Record<Status, CardType[]> = { TODO: [], IN_PROGRESS: [], DONE: [] };
+        const map: Record<Status, CardType[]> = {TODO: [], IN_PROGRESS: [], DONE: []};
         cards.forEach((card) => map[card.status].push(card));
         Object.values(map).forEach((arr) => arr.sort((a, b) => (a.position ?? 0) - (b.position ?? 0)));
         return map;
     }, [cards]);
 
-    // ================== Burndown & Velocity ==================
-    const dateKey = (d: Date) => d.toISOString().slice(0, 10);
-
-    const burndown = useMemo((): BurndownPoint[] => {
-        if (!cards.length) return [];
-
-        // map card -> earliest DONE date
-        const doneMap = new Map<number, Date>();
-        histories.forEach((h) => {
-            if (h.toStatus === "DONE") {
-                const d = new Date(h.changeDate);
-                const current = doneMap.get(h.card.id);
-                if (!current || d < current) doneMap.set(h.card.id, d);
-            }
-        });
-
-        const parsed = cards
-            .filter((c) => c.createdAt)
-            .map((c) => {
-                const created = new Date(c.createdAt as string);
-                const done = doneMap.get(c.id);
-                // dùng estimateHours làm story point; nếu không có, mặc định 1
-                const points = Number.isFinite(c.estimateHours) ? Number(c.estimateHours) : 1;
-                return { created, done, points };
-            });
-
-        if (!parsed.length) return [];
-
-        const start = parsed.reduce((min, c) => (c.created < min ? c.created : min), parsed[0].created);
-        const endCandidates: Date[] = [...parsed.map((c) => c.done).filter(Boolean) as Date[], new Date()];
-        const end = endCandidates.reduce((max, d) => (d > max ? d : max), start);
-
-        const days: string[] = [];
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            days.push(dateKey(d));
-        }
-
-        const totalPoints = parsed.reduce((s, c) => s + c.points, 0);
-
-        const remainingByDay = days.map((day) => {
-            const dayDate = new Date(day + "T00:00:00");
-            let remaining = 0;
-            parsed.forEach((c) => {
-                const started = c.created <= dayDate;
-                const done = c.done ? c.done <= dayDate : false;
-                if (started && !done) remaining += c.points;
-            });
-            return remaining;
-        });
-
-        // đường lý tưởng: giảm đều
-        const idealByDay = days.map((_, idx) => {
-            const step = totalPoints / Math.max(1, days.length - 1);
-            return Math.max(0, totalPoints - step * idx);
-        });
-
-        return days.map((d, i) => ({
-            date: d,
-            remaining: remainingByDay[i],
-            ideal: idealByDay[i],
-        }));
-    }, [cards, histories]);
-
-    const velocityInfo = useMemo(() => {
-        if (!burndown.length) return { velocity: 0, remaining: 0, etaDate: null as string | null };
-
-        const remainingToday = burndown[burndown.length - 1].remaining;
-        const totalDone = burndown[0].remaining - remainingToday;
-        const daysElapsed = Math.max(1, burndown.length - 1);
-        const velocity = totalDone / daysElapsed; // điểm/ngày
-
-        let etaDate: string | null = null;
-        if (velocity > 0 && remainingToday > 0) {
-            const daysNeeded = Math.ceil(remainingToday / velocity);
-            const eta = new Date();
-            eta.setDate(eta.getDate() + daysNeeded);
-            etaDate = eta.toISOString().slice(0, 10);
-        }
-
-        return { velocity, remaining: remainingToday, etaDate };
-    }, [burndown]);
-
-    // ================== Metrics cũ (cycle time, throughput) ==================
+    // =============== Metrics (cycle time, throughput) ==================
     const metrics = useMemo(() => {
         const firstDoneByCard = new Map<number, Date>();
         histories.forEach((history) => {
             if (history.toStatus === "DONE") {
                 const doneDate = new Date(history.changeDate);
                 const existing = firstDoneByCard.get(history.card.id);
-                if (!existing || doneDate < existing) firstDoneByCard.set(history.card.id, doneDate);
+                if (existing === undefined || doneDate < existing) firstDoneByCard.set(history.card.id, doneDate);
             }
         });
 
@@ -276,7 +286,7 @@ const BoardPage: React.FC = () => {
 
         const allDates: Date[] = [];
         cards.forEach((card) => card.createdAt && allDates.push(new Date(card.createdAt)));
-        firstDoneByCard.forEach((date) => allDates.push(date));
+        firstDoneByCard.forEach((date) => allDates.push(date as Date));
         const minDate = allDates.length ? allDates.reduce((a, b) => (a < b ? a : b)) : null;
         const maxDate = allDates.length ? allDates.reduce((a, b) => (a > b ? a : b)) : null;
         const daysSpan =
@@ -285,7 +295,7 @@ const BoardPage: React.FC = () => {
 
         const progress = cards.length ? (doneCount / cards.length) * 100 : 0;
 
-        return { cycleTimes, avgCycle, throughput, progress, doneCount, total: cards.length };
+        return {cycleTimes, avgCycle, throughput, progress, doneCount, total: cards.length};
     }, [cards, histories]);
 
     // ================== Role helpers ==================
@@ -301,7 +311,7 @@ const BoardPage: React.FC = () => {
         if (!board) return;
         setRoleUpdating(memberId);
         try {
-            await api.post("/boards/change-role", { boardId: board.id, userId, role });
+            await api.post("/boards/change-role", {boardId: board.id, userId, role});
             await loadMembers();
             alert("Đã cập nhật quyền");
         } catch (e: any) {
@@ -315,7 +325,7 @@ const BoardPage: React.FC = () => {
         if (!board) return;
         setRemovingId(memberId);
         try {
-            await api.post("/boards/remove-member", { boardId: board.id, userId });
+            await api.post("/boards/remove-member", {boardId: board.id, userId});
             await loadMembers();
             alert("Đã xóa thành viên");
         } catch (e: any) {
@@ -355,15 +365,19 @@ const BoardPage: React.FC = () => {
             }
             setCardModalOpen(false);
             setEditingCard(null);
-            loadAll();
+            await Promise.all([loadAll(), refreshSnapshot()]);
         } catch (error: any) {
             alert(error?.response?.data || error.message || "Lỗi lưu thẻ");
         }
     };
 
     const deleteCard = async (id: number) => {
-        await api.delete(`/cards/${id}`);
-        loadAll();
+        try {
+            await api.delete(`/cards/${id}`);
+            await Promise.all([loadAll(), refreshSnapshot()]);
+        } catch (e: any) {
+            alert(e?.response?.data || e.message || "Xóa thất bại");
+        }
     };
 
     // ================== Drag & Drop ==================
@@ -374,7 +388,7 @@ const BoardPage: React.FC = () => {
     };
 
     const handleDragEnd = async (event: DragEndEvent) => {
-        const { active, over } = event;
+        const {active, over} = event;
         setActiveCard(null);
         if (!over) return;
 
@@ -403,7 +417,7 @@ const BoardPage: React.FC = () => {
                 targetStatus,
                 targetPosition: targetIndex,
             });
-            loadAll();
+            await Promise.all([loadAll(), refreshSnapshot()]);
         } catch (error: any) {
             alert(error?.response?.data || error.message || "Di chuyển thất bại");
         }
@@ -461,14 +475,15 @@ const BoardPage: React.FC = () => {
     const statusChip = (status?: string) => {
         if (!status) return null;
         const color = status === "DONE" ? "success" : "warning";
-        return <Chip size="small" label={status === "DONE" ? "DONE" : "IN PROGRESS"} color={color} sx={{ ml: 1 }} />;
+        return <Chip size="small" label={status === "DONE" ? "DONE" : "IN PROGRESS"} color={color} sx={{ml: 1}}/>;
     };
+
 
     // ================== Render ==================
     return (
         <Box p={3} bgcolor="grey.50" minHeight="100vh">
             <Stack
-                direction={{ xs: "column", md: "row" }}
+                direction={{xs: "column", md: "row"}}
                 spacing={2}
                 alignItems="center"
                 justifyContent="space-between"
@@ -476,17 +491,19 @@ const BoardPage: React.FC = () => {
             >
                 <Stack direction="row" spacing={1} alignItems="center">
                     <IconButton aria-label="Quay lại" size="small" onClick={() => navigate("/workspaces")}>
-                        <ArrowBackIcon />
+                        <ArrowBackIcon/>
                     </IconButton>
                     <Typography variant="h5">
                         {board?.name || `Board #${boardId}`}
                         {statusChip(board?.status)}
                     </Typography>
                 </Stack>
-                <Stack spacing={0.5} textAlign={{ xs: "left", md: "right" }}>
-                    {board?.createdAt && <Typography variant="body2">Created: {board.createdAt.slice(0, 10)}</Typography>}
+                <Stack spacing={0.5} textAlign={{xs: "left", md: "right"}}>
+                    {board?.createdAt &&
+                        <Typography variant="body2">Created: {board.createdAt.slice(0, 10)}</Typography>}
                     {board?.endDate && <Typography variant="body2">End: {board.endDate}</Typography>}
-                    {board?.wipLimit && <Typography variant="body2">WIP (IN PROGRESS) limit: {board.wipLimit}</Typography>}
+                    {board?.wipLimit &&
+                        <Typography variant="body2">WIP (IN PROGRESS) limit: {board.wipLimit}</Typography>}
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
                     {renderMembers()}
@@ -501,11 +518,11 @@ const BoardPage: React.FC = () => {
                 </Stack>
             </Stack>
 
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary" indicatorColor="primary" sx={{ mb: 2 }}>
-                <Tab label="Kanban" />
-                <Tab label="Biểu đồ" />
-                <Tab label="Thành viên" />
-                <Tab label="Lịch sử" />
+            <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary" indicatorColor="primary" sx={{mb: 2}}>
+                <Tab label="Kanban"/>
+                <Tab label="Biểu đồ"/>
+                <Tab label="Thành viên"/>
+                <Tab label="Lịch sử"/>
             </Tabs>
 
             {/* Kanban tab */}
@@ -528,7 +545,7 @@ const BoardPage: React.FC = () => {
                                     size="small"
                                     variant="outlined"
                                     fullWidth
-                                    sx={{ mb: 1 }}
+                                    sx={{mb: 1}}
                                     onClick={() => {
                                         setEditingCard({} as CardType);
                                         setSelectedStatus(status);
@@ -565,7 +582,9 @@ const BoardPage: React.FC = () => {
                             }}
                         >
                             {activeCard ? (
-                                <CardItem card={activeCard} onEdit={() => {}} onDelete={() => {}} dragging />
+                                <CardItem card={activeCard} onEdit={() => {
+                                }} onDelete={() => {
+                                }} dragging/>
                             ) : null}
                         </DragOverlay>
                     </DndContext>
@@ -577,24 +596,28 @@ const BoardPage: React.FC = () => {
                 <Box
                     sx={{
                         display: "grid",
-                        gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                        gridTemplateColumns: {xs: "1fr", md: "1fr 1fr"},
                         gap: 2,
                     }}
                 >
                     <Box>
                         <Typography variant="h6" mb={1}>
-                            Burndown chart (Recharts)
+                            Burndown chart (backend)
                         </Typography>
                         <Box maxWidth={720} height={360} mb={2} bgcolor="white" borderRadius={1} boxShadow={1} p={2}>
-                            {burndown.length ? (
+                            {burndownLoading ? (
+                                <Typography color="text.secondary">Đang tải burndown...</Typography>
+                            ) : burndownError ? (
+                                <Typography color="error">{burndownError}</Typography>
+                            ) : burndownData.length ? (
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={burndown} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                                        <YAxis tick={{ fontSize: 12 }} />
-                                        <RTooltip />
-                                        <Legend />
-                                        <ReferenceLine y={0} stroke="#999" />
+                                    <LineChart data={burndownData} margin={{top: 10, right: 20, left: 0, bottom: 5}}>
+                                        <CartesianGrid strokeDasharray="3 3"/>
+                                        <XAxis dataKey="date" tick={{fontSize: 12}}/>
+                                        <YAxis tick={{fontSize: 12}}/>
+                                        <RTooltip/>
+                                        <Legend/>
+                                        <ReferenceLine y={0} stroke="#999"/>
                                         <Area
                                             type="monotone"
                                             dataKey="remaining"
@@ -608,7 +631,7 @@ const BoardPage: React.FC = () => {
                                             name="Remaining (thực tế)"
                                             stroke="#1976d2"
                                             strokeWidth={2.2}
-                                            dot={{ r: 3 }}
+                                            dot={{r: 3}}
                                         />
                                         <Line
                                             type="linear"
@@ -626,26 +649,78 @@ const BoardPage: React.FC = () => {
                         </Box>
                         <Stack spacing={1}>
                             <Typography fontWeight={600}>
-                                Velocity (avg): {velocityInfo.velocity.toFixed(2)} điểm/ngày
+                                Velocity (avg, backend): {averageVelocity.toFixed(2)} điểm/tuần
                             </Typography>
                             <Typography color="text.secondary">
-                                Remaining điểm: {velocityInfo.remaining}{" "}
-                                {velocityInfo.etaDate
-                                    ? ` | Ước tính hoàn thành: ${velocityInfo.etaDate}`
-                                    : "(chưa đủ dữ liệu)"}
+                                Remaining points: {remainingPoints} / Total: {totalPoints}
                             </Typography>
                             <Typography color="text.secondary">
-                                Tổng điểm ban đầu: {burndown.length ? burndown[0].remaining : 0}
+                                Ước tính hoàn thành: {estimatedEndDate ?? "Chưa đủ dữ liệu"}{" "}
+                                {projectDeadline ? ` | Deadline: ${projectDeadline}` : ""}
+                                {projectHealth ? ` | Trạng thái: ${projectHealth}` : ""}
                             </Typography>
                         </Stack>
                     </Box>
 
                     <Box>
+                        <Typography variant="h6" mb={1}>
+                            Velocity theo tuần
+                        </Typography>
+                        <Box maxWidth={720} height={360} mb={2} bgcolor="white" borderRadius={1} boxShadow={1} p={2}>
+                            {burndownLoading ? (
+                                <Typography color="text.secondary">Đang tải velocity...</Typography>
+                            ) : burndownError ? (
+                                <Typography color="error">{burndownError}</Typography>
+                            ) : currentVelocityWeeks.length ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={currentVelocityWeeks}
+                                              margin={{top: 10, right: 20, left: 0, bottom: 40}}>
+                                        <CartesianGrid strokeDasharray="3 3"/>
+                                        <XAxis dataKey="weekLabel" interval={0} tick={{fontSize: 11}} tickMargin={8}
+                                               height={28} angle={0} textAnchor="middle"
+                                        /> <YAxis/>
+                                        <RTooltip/>
+                                        <Legend/>
+                                        <Bar dataKey="completedPoints" name="Points hoàn thành" fill="#1976d2"/>
+                                        <Bar dataKey="completedTasks" name="Tasks hoàn thành" fill="#9c27b0"/>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <Typography color="text.secondary">Chưa có dữ liệu velocity.</Typography>
+                            )}
+                        </Box>
+
+                        {/* Điều khiển phân trang theo tháng */}
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2} px={0.5}>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => setVelocityMonthIndex((v) => Math.min(velocityMonths.length - 1, v + 1))}
+                                disabled={velocityMonthIndex >= velocityMonths.length - 1}
+                            >
+                                « Tháng sau
+                            </Button>
+                            <Typography fontWeight={600}>
+                                {currentVelocityMonthLabel || "Không có tháng"}
+                                {velocityMonths.length > 0 ? ` (${velocityMonthIndex + 1}/${velocityMonths.length})` : ""}
+                            </Typography>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => setVelocityMonthIndex((v) => Math.max(0, v - 1))}
+                                disabled={velocityMonthIndex <= 0}
+                            >
+                                Tháng trước »
+                            </Button>
+                        </Stack>
+
+                        {/* Cycle Time & Forecast */}
                         <Typography variant="subtitle1" fontWeight={600} mb={1}>
                             4. Cycle Time (thời gian hoàn thành 1 task)
                         </Typography>
                         <Typography variant="body2" color="text.secondary" mb={1}>
-                            CycleTime = Ngày DONE − Ngày bắt đầu (createdAt). Chỉ tính các task đã DONE và có lịch sử DONE.
+                            CycleTime = Ngày DONE − Ngày bắt đầu (createdAt). Chỉ tính các task đã DONE và có lịch sử
+                            DONE.
                         </Typography>
                         <Box
                             border={1}
@@ -694,7 +769,8 @@ const BoardPage: React.FC = () => {
                             </Stack>
                         </Box>
 
-                        <Box mt={2} border={1} borderColor="grey.200" borderRadius={1} p={2} bgcolor="white" boxShadow={1}>
+                        <Box mt={2} border={1} borderColor="grey.200" borderRadius={1} p={2} bgcolor="white"
+                             boxShadow={1}>
                             <Typography variant="subtitle1" fontWeight={600} mb={1}>
                                 5. Dự báo tiến độ (backend)
                             </Typography>
@@ -750,10 +826,10 @@ const BoardPage: React.FC = () => {
                                         Role hiện tại: {member.role}
                                     </Typography>
                                 </Stack>
-                                <Box flexGrow={1} />
+                                <Box flexGrow={1}/>
                                 {isAdmin && (
                                     <Stack direction="row" spacing={1}>
-                                        <FormControl size="small" sx={{ minWidth: 140 }}>
+                                        <FormControl size="small" sx={{minWidth: 140}}>
                                             <Select
                                                 value={member.role}
                                                 onChange={(e) =>
@@ -858,7 +934,7 @@ const BoardPage: React.FC = () => {
                         <TextField
                             type="date"
                             label="Deadline"
-                            InputLabelProps={{ shrink: true }}
+                            InputLabelProps={{shrink: true}}
                             value={dueDateInput}
                             onChange={(e) => setDueDateInput(e.target.value)}
                             fullWidth
@@ -866,7 +942,8 @@ const BoardPage: React.FC = () => {
 
                         <FormControl fullWidth>
                             <InputLabel>Ưu tiên</InputLabel>
-                            <Select value={priorityInput} label="Ưu tiên" onChange={(e) => setPriorityInput(e.target.value)}>
+                            <Select value={priorityInput} label="Ưu tiên"
+                                    onChange={(e) => setPriorityInput(e.target.value)}>
                                 <MenuItem value="LOW">LOW</MenuItem>
                                 <MenuItem value="MEDIUM">MEDIUM</MenuItem>
                                 <MenuItem value="HIGH">HIGH</MenuItem>
@@ -883,7 +960,7 @@ const BoardPage: React.FC = () => {
                                     estimateHours: e.target.value === "" ? undefined : Number(e.target.value),
                                 }))
                             }
-                            inputProps={{ min: 0 }}
+                            inputProps={{min: 0}}
                             fullWidth
                         />
 
@@ -897,7 +974,7 @@ const BoardPage: React.FC = () => {
                                     actualHours: e.target.value === "" ? undefined : Number(e.target.value),
                                 }))
                             }
-                            inputProps={{ min: 0 }}
+                            inputProps={{min: 0}}
                             fullWidth
                         />
 
@@ -918,7 +995,7 @@ const BoardPage: React.FC = () => {
                                 return;
                             }
                             const status = editingCard?.status ?? "TODO";
-                            saveCard({ ...editingCard, status });
+                            saveCard({...editingCard, status});
                         }}
                     >
                         Lưu
@@ -934,7 +1011,7 @@ const BoardPage: React.FC = () => {
                         <TextField
                             label="Tên board"
                             value={board?.name ?? ""}
-                            onChange={(e) => setBoard((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+                            onChange={(e) => setBoard((prev) => (prev ? {...prev, name: e.target.value} : prev))}
                             fullWidth
                         />
                         <FormControl fullWidth>
@@ -960,15 +1037,15 @@ const BoardPage: React.FC = () => {
                         <TextField
                             type="date"
                             label="Ngày kết thúc"
-                            InputLabelProps={{ shrink: true }}
+                            InputLabelProps={{shrink: true}}
                             value={board?.endDate ?? ""}
-                            onChange={(e) => setBoard((prev) => (prev ? { ...prev, endDate: e.target.value } : prev))}
+                            onChange={(e) => setBoard((prev) => (prev ? {...prev, endDate: e.target.value} : prev))}
                             fullWidth
                         />
                         <TextField
                             label="WIP limit (IN_PROGRESS)"
                             type="number"
-                            inputProps={{ min: 0 }}
+                            inputProps={{min: 0}}
                             value={board?.wipLimit ?? ""}
                             onChange={(e) =>
                                 setBoard((prev) =>
