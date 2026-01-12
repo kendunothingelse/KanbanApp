@@ -68,7 +68,7 @@ public class BoardQueryService {
         return boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
     }
 
-    // [NEW] Lấy thống kê số task DONE và tổng số task của board
+    //Lấy thống kê số task DONE và tổng số task của board
     public Map<String, Integer> getBoardProgress(Long boardId) {
         Board board = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));
         List<Card> cards = cardRepo.findByBoard(board);
@@ -82,7 +82,7 @@ public class BoardQueryService {
         return result;
     }
 
-    // [NEW] Kiểm tra và tự động cập nhật trạng thái board nếu tất cả task đều DONE
+    //Kiểm tra và tự động cập nhật trạng thái board nếu tất cả task đều DONE
     @Transactional
     public Board checkAndUpdateBoardStatus(Long boardId) {
         Board board = boardRepo.findById(boardId).orElseThrow(() -> new RuntimeException("Board not found"));

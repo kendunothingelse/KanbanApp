@@ -37,7 +37,7 @@ public class CardService {
         }
     }
 
-    // [NEW] Kiểm tra và tự động cập nhật trạng thái board
+    //Kiểm tra và tự động cập nhật trạng thái board
     private void checkAndUpdateBoardStatus(Board board) {
         var cards = cardRepo.findByBoard(board);
         if (cards.isEmpty()) {

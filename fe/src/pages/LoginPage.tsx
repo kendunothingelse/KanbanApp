@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Box, Button, Typography, Stack, TextField, Link } from "@mui/material";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
+import { useNotification } from "../components/NotificationProvider";
 
 const LoginPage: React.FC = () => {
     const { login } = useAuth();
@@ -9,14 +10,16 @@ const LoginPage: React.FC = () => {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const { notify } = useNotification();
 
     const onSubmit = async () => {
         setLoading(true);
         try {
             await login(username, password);
+            notify("Đăng nhập thành công", "success");
             nav("/workspaces");
         } catch (e: any) {
-            alert(e?.response?.data || e.message || "Đăng nhập thất bại");
+            notify(e?.response?.data || e.message || "Đăng nhập thất bại", "error");
         } finally {
             setLoading(false);
         }

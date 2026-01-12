@@ -7,13 +7,54 @@ import BoardPage from "./pages/BoardPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import WorkspaceDashboard from "./pages/WorkspaceDashboard";
+import { NotificationProvider } from "./components/NotificationProvider";
 
-const theme = createTheme();
+const theme = createTheme({
+    palette: {
+        primary: { main: "#384B70" },      // Navy
+        secondary: { main: "#507687" },    // Xanh xám
+        warning: { main: "#E6A23C" },      // Vàng cam
+        error: { main: "#B8001F" },        // Đỏ đậm
+        success: { main: "#507687" },      // Xanh xám
+        info: { main: "#384B70" },         // Navy
+        background: {
+            default: "#FCFAEE",            // Kem nhạt
+            paper: "#ffffff"
+        },
+        text: {
+            primary: "#384B70",
+            secondary: "#507687",
+        },
+    },
+    components: {
+        MuiButton: {
+            styleOverrides: {
+                root: {
+                    textTransform: "none",
+                    borderRadius: 10,
+                    fontWeight: 600,
+                }
+            },
+        },
+        MuiChip: {
+            styleOverrides: {
+                root: { borderRadius: 8 }
+            }
+        },
+        MuiCard: {
+            styleOverrides: {
+                root: {
+                    borderRadius: 12,
+                }
+            }
+        },
+    },
+});
 
-const App = () => {
-    return (
-        <ThemeProvider theme={theme}>
-            <CssBaseline />
+const App = () => (
+    <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <NotificationProvider>
             <AuthProvider>
                 <BrowserRouter>
                     <Routes>
@@ -39,8 +80,8 @@ const App = () => {
                     </Routes>
                 </BrowserRouter>
             </AuthProvider>
-        </ThemeProvider>
-    );
-};
+        </NotificationProvider>
+    </ThemeProvider>
+);
 
 export default App;

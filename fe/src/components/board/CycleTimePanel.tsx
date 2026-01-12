@@ -1,0 +1,82 @@
+import React from "react";
+import { Card, Typography, Box } from "@mui/material";
+import {
+    ResponsiveContainer,
+    BarChart,
+    CartesianGrid,
+    XAxis,
+    YAxis,
+    Tooltip as RTooltip,
+    Bar,
+    ReferenceLine,
+} from "recharts";
+import { Card as CardType, CardHistory } from "../../types";
+import { palette } from "../../theme/colors";
+
+interface Props {
+    cards: CardType[];
+    histories: CardHistory[];
+    avgCycle: number;
+}
+
+const CycleTimePanel: React. FC<Props> = ({ cards, histories, avgCycle }) => {
+    const data = cards
+        .filter((c) => c.status === "DONE")
+        .map((c) => {
+            const h = histories
+                .filter((x) => x.card.id === c. id && x.toStatus === "DONE")
+                .sort((a, b) => new Date(a.changeDate).getTime() - new Date(b.changeDate).getTime())[0];
+            if (! h || ! c.createdAt) return null;
+            const days = (new Date(h.changeDate).getTime() - new Date(c.createdAt).getTime()) / 86400000;
+            return { name: c.title. slice(0, 15), days: Number(days.toFixed(1)) };
+        })
+        .filter(Boolean) as { name: string; days: number }[];
+
+    return (
+        <Card sx={{ p: 2.5, border: `1px solid ${palette.border. light}` }}>
+            <Typography variant="h6" mb={0.5} color="text.primary">
+                Phân bổ Cycle Time
+            </Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+                Thời gian hoàn thành mỗi task.  Đường đỏ = trung bình.
+            </Typography>
+            <Box height={280}>
+                {data.length ?  (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 50 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={palette.border. light} />
+                            <XAxis
+                                dataKey="name"
+                                interval={0}
+                                angle={-35}
+                                textAnchor="end"
+                                height={50}
+                                tick={{ fontSize: 10, fill: palette. text.secondary }}
+                            />
+                            <YAxis
+                                label={{ value: "Ngày", angle: -90, position: "insideLeft", fontSize: 11 }}
+                                tick={{ fontSize: 11, fill: palette. text.secondary }}
+                            />
+                            <RTooltip
+                                contentStyle={{ borderRadius: 8, border: `1px solid ${palette. border.light}` }}
+                            />
+                            <Bar dataKey="days" name="Số ngày" fill={palette. primary.main} radius={[4, 4, 0, 0]} />
+                            <ReferenceLine
+                                y={avgCycle}
+                                stroke={palette. accent.main}
+                                strokeDasharray="4 4"
+                                strokeWidth={2}
+                            />
+                        </BarChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <Box display="flex" alignItems="center" justifyContent="center" height="100%">
+                        <Typography color="text.secondary">Chưa có task hoàn thành. </Typography>
+                    </Box>
+                )}
+            </Box>
+        </Card>
+    );
+};
+
+export default CycleTimePanel;

@@ -43,13 +43,13 @@ public class BoardQueryController {
         return boardQueryService.forecast(boardId);
     }
 
-    // [NEW] API lấy progress của board (số task done / tổng)
+    //API lấy progress của board (số task done / tổng)
     @GetMapping("/{boardId}/progress")
     public Map<String, Integer> progress(@PathVariable Long boardId) {
         return boardQueryService.getBoardProgress(boardId);
     }
 
-    // [NEW] API kiểm tra và tự động cập nhật trạng thái board
+    //API kiểm tra và tự động cập nhật trạng thái board
     @PostMapping("/{boardId}/check-status")
     public Board checkAndUpdateStatus(@PathVariable Long boardId) {
         return boardQueryService.checkAndUpdateBoardStatus(boardId);

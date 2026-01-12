@@ -20,6 +20,7 @@ import CreateBoardModal from "../components/CreateBoardModal";
 import { useNavigate } from "react-router-dom";
 import CreateWorkspaceButton from "../components/CreateWorkspaceButton";
 import { getAvatarColor, getAvatarColorDifferent } from "../utils/avatarColor";
+import { useNotification } from "../components/NotificationProvider";
 
 type BoardWithMembers = Board & {
     members?: { id: number; user: { id: number; username: string } }[];
@@ -35,6 +36,7 @@ const WorkspaceDashboard: React.FC = () => {
     const [selectedWs, setSelectedWs] = useState<number | null>(null);
     const [wsSearch, setWsSearch] = useState("");
     const nav = useNavigate();
+    const { notify } = useNotification();
 
     const loadBoards = async () => {
         const res = await api.get("/boards/me");
@@ -108,21 +110,21 @@ const WorkspaceDashboard: React.FC = () => {
         if (id === MAIN_WS.id) return;
         try {
             await api.delete(`/workspaces/${id}`);
-            alert("Đã xóa workspace");
+            notify("Đã xóa workspace");
             await loadOwnedWorkspaces();
             await loadBoards();
         } catch (e: any) {
-            alert(e?.response?.data || e.message || "Xóa workspace thất bại");
+            notify(e?.response?.data || e.message || "Xóa workspace thất bại");
         }
     };
 
     const deleteBoard = async (id: number) => {
         try {
             await api.delete(`/boards/${id}`);
-            alert("Đã xóa board");
+            notify("Đã xóa board");
             await loadBoards();
         } catch (e: any) {
-            alert(e?.response?.data || e.message || "Xóa board thất bại");
+            notify(e?.response?.data || e.message || "Xóa board thất bại");
         }
     };
 

@@ -9,23 +9,25 @@ import {
     Stack,
 } from "@mui/material";
 import api from "../api";
+import { useNotification } from "./NotificationProvider";
 
 const CreateWorkspaceButton: React.FC<{ onCreated: () => void }> = ({ onCreated }) => {
     const [isOpen, setOpen] = useState(false);
     const [name, setName] = useState("");
     const [loading, setLoading] = useState(false);
+    const { notify } = useNotification();
 
     const createWs = async () => {
         if (!name.trim()) return;
         setLoading(true);
         try {
             await api.post("/workspaces", { name });
-            alert("Đã tạo workspace");
+            notify("Đã tạo workspace");
             onCreated();
             setOpen(false);
             setName("");
         } catch (e: any) {
-            alert(e?.response?.data || e.message || "Lỗi");
+            notify(e?.response?.data || e.message || "Lỗi");
         } finally {
             setLoading(false);
         }

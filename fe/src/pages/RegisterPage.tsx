@@ -2,21 +2,23 @@ import React, { useState } from "react";
 import { Box, Button, Typography, Stack, TextField, Link } from "@mui/material";
 import api from "../api";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
+import { useNotification } from "../components/NotificationProvider";
 
 const RegisterPage: React.FC = () => {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const nav = useNavigate();
+    const { notify } = useNotification();
 
     const onSubmit = async () => {
         setLoading(true);
         try {
             await api.post("/auth/register", { username, password });
-            alert("Đăng ký thành công, hãy đăng nhập");
+            notify("Đăng ký thành công, hãy đăng nhập");
             nav("/login");
         } catch (e: any) {
-            alert(e?.response?.data || e.message || "Đăng ký thất bại");
+            notify(e?.response?.data || e.message || "Đăng ký thất bại");
         } finally {
             setLoading(false);
         }
