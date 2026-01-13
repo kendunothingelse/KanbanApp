@@ -11,43 +11,19 @@ import { NotificationProvider } from "./components/NotificationProvider";
 
 const theme = createTheme({
     palette: {
-        primary: { main: "#384B70" },      // Navy
-        secondary: { main: "#507687" },    // Xanh xám
-        warning: { main: "#E6A23C" },      // Vàng cam
-        error: { main: "#B8001F" },        // Đỏ đậm
-        success: { main: "#507687" },      // Xanh xám
-        info: { main: "#384B70" },         // Navy
-        background: {
-            default: "#FCFAEE",            // Kem nhạt
-            paper: "#ffffff"
-        },
-        text: {
-            primary: "#384B70",
-            secondary: "#507687",
-        },
+        primary: { main: "#384B70" },
+        secondary: { main: "#507687" },
+        warning: { main: "#E6A23C" },
+        error: { main: "#B8001F" },
+        success: { main: "#507687" },
+        info: { main: "#384B70" },
+        background: { default: "#FCFAEE", paper: "#ffffff" },
+        text: { primary: "#384B70", secondary: "#507687" },
     },
     components: {
-        MuiButton: {
-            styleOverrides: {
-                root: {
-                    textTransform: "none",
-                    borderRadius: 10,
-                    fontWeight: 600,
-                }
-            },
-        },
-        MuiChip: {
-            styleOverrides: {
-                root: { borderRadius: 8 }
-            }
-        },
-        MuiCard: {
-            styleOverrides: {
-                root: {
-                    borderRadius: 12,
-                }
-            }
-        },
+        MuiButton: { styleOverrides: { root: { textTransform: "none", borderRadius: 10, fontWeight: 600 } } },
+        MuiChip: { styleOverrides: { root: { borderRadius: 8 } } },
+        MuiCard: { styleOverrides: { root: { borderRadius: 12, boxShadow: "none" } } },
     },
 });
 
@@ -60,22 +36,8 @@ const App = () => (
                     <Routes>
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/register" element={<RegisterPage />} />
-                        <Route
-                            path="/workspaces"
-                            element={
-                                <ProtectedRoute>
-                                    <WorkspaceDashboard />
-                                </ProtectedRoute>
-                            }
-                        />
-                        <Route
-                            path="/boards/:boardId"
-                            element={
-                                <ProtectedRoute>
-                                    <BoardPage />
-                                </ProtectedRoute>
-                            }
-                        />
+                        <Route path="/workspaces" element={<ProtectedRoute><WorkspaceDashboard /></ProtectedRoute>} />
+                        <Route path="/boards/:boardId" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
                         <Route path="*" element={<Navigate to="/workspaces" replace />} />
                     </Routes>
                 </BrowserRouter>

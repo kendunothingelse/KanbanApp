@@ -5,80 +5,59 @@ import { useNavigate } from "react-router-dom";
 import { Board, BoardMember } from "../../types";
 import MemberList from "./MemberList";
 import { palette } from "../../theme/colors";
+import { labels } from "../../utils/labels";
 
 interface BoardHeaderProps {
     board: Board | null;
     members: BoardMember[];
-    mainColor:  string;
+    mainColor: string;
     isAdmin: boolean;
     onEditBoard: () => void;
     onInvite: () => void;
 }
 
-const BoardHeader:  React.FC<BoardHeaderProps> = ({
-                                                      board,
-                                                      members,
-                                                      mainColor,
-                                                      isAdmin,
-                                                      onEditBoard,
-                                                      onInvite,
-                                                  }) => {
+const BoardHeader: React.FC<BoardHeaderProps> = ({ board, members, mainColor, isAdmin, onEditBoard, onInvite }) => {
     const navigate = useNavigate();
-
-    const statusChip = (status?:  string) => {
-        if (!status) return null;
-        const isDone = status === "DONE";
-        return (
+    const statusChip = (status?: string) =>
+        status ? (
             <Chip
                 size="small"
-                label={isDone ?  "DONE" : "IN PROGRESS"}
+                label={status === "DONE" ? "Hoàn thành" : "Đang làm"}
                 sx={{
                     ml: 1,
-                    bgcolor: isDone ? palette.secondary.main : palette. warning.main,
-                    color: palette.text.primary,
+                    bgcolor: status === "DONE" ? palette.secondary.main : palette.accent.main,
+                    color: palette.accent.contrastText,
                     fontWeight: 600,
                 }}
             />
-        );
-    };
+        ) : null;
 
     return (
-        <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={2}
-            alignItems="center"
-            justifyContent="space-between"
-            mb={2}
-        >
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="center" justifyContent="space-between" mb={2}>
             <Stack direction="row" spacing={1} alignItems="center">
-                <IconButton
-                    aria-label="Quay lại"
-                    size="small"
-                    onClick={() => navigate("/workspaces")}
-                    sx={{ color: palette.text. primary }}
-                >
+                <IconButton aria-label="Quay lại" size="small" onClick={() => navigate("/workspaces")} sx={{ color: palette.text.primary }}>
                     <ArrowBackIcon />
                 </IconButton>
                 <Typography variant="h5" fontWeight={700} color="text.primary">
-                    {board?.name || "Loading..."}
+                    {board?.name || "Đang tải..."}
                 </Typography>
-                {statusChip(board?. status)}
+                {statusChip(board?.status)}
             </Stack>
 
             <Stack spacing={0.5} textAlign={{ xs: "left", md: "right" }}>
                 {board?.createdAt && (
                     <Typography variant="body2" color="text.secondary">
-                        Created: {board.createdAt. slice(0, 10)}
+                        Ngày tạo: {board.createdAt.slice(0, 10)}
                     </Typography>
                 )}
                 {board?.endDate && (
                     <Typography variant="body2" color="text.secondary">
-                        Deadline: {board.endDate}
+                        Hạn dự án: {board.endDate}
                     </Typography>
                 )}
                 {board?.wipLimit && (
                     <Typography variant="body2" color="text.secondary">
-                        WIP limit: {board.wipLimit}
+                        {labels.wipLimit}: {board.wipLimit}
                     </Typography>
                 )}
             </Stack>
@@ -90,25 +69,15 @@ const BoardHeader:  React.FC<BoardHeaderProps> = ({
                         variant="outlined"
                         onClick={onEditBoard}
                         sx={{
-                            borderColor: palette.secondary. main,
+                            borderColor: palette.secondary.main,
                             color: palette.text.primary,
-                            "&:hover":  {
-                                borderColor: palette.secondary.dark,
-                                bgcolor: `${palette.secondary. light}33`,
-                            },
+                            "&:hover": { borderColor: palette.secondary.dark, bgcolor: `${palette.secondary.light}33` },
                         }}
                     >
-                        Sửa board
+                        Sửa {labels.board}
                     </Button>
                 )}
-                <Button
-                    variant="contained"
-                    onClick={onInvite}
-                    sx={{
-                        bgcolor: palette.primary. main,
-                        "&:hover": { bgcolor: palette.primary.dark },
-                    }}
-                >
+                <Button variant="contained" onClick={onInvite} sx={{ bgcolor: palette.secondary.main, "&:hover": { bgcolor: palette.secondary.dark } }}>
                     Mời thành viên
                 </Button>
             </Stack>
