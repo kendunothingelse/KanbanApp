@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from "react";
 import { Snackbar, Alert, Button } from "@mui/material";
 
 type Severity = "success" | "error" | "info" | "warning";
-type NotifyOptions = { actionLabel?: string; onAction?: () => void; autoHideMs?: number };
+type NotifyOptions = { actionLabel?:  string; onAction?: () => void; autoHideMs?: number };
 
 type Ctx = {
     notify: (message: string, severity?: Severity, opts?: NotifyOptions) => void;
@@ -10,7 +10,7 @@ type Ctx = {
 
 const NotificationContext = createContext<Ctx | undefined>(undefined);
 
-export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const NotificationProvider: React.FC<{ children: React. ReactNode }> = ({ children }) => {
     const [open, setOpen] = useState(false);
     const [msg, setMsg] = useState("");
     const [severity, setSeverity] = useState<Severity>("info");
@@ -18,14 +18,24 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const [onAction, setOnAction] = useState<(() => void) | undefined>();
     const [autoHideMs, setAutoHideMs] = useState<number | undefined>(3000);
 
-    const notify = useCallback((message: string, sev: Severity = "info", opts?: NotifyOptions) => {
+    const notify = useCallback((message: string, sev:  Severity = "info", opts?:  NotifyOptions) => {
         setMsg(message);
         setSeverity(sev);
         setActionLabel(opts?.actionLabel);
         setOnAction(() => opts?.onAction);
-        setAutoHideMs(opts?.autoHideMs ?? 3000);
+        setAutoHideMs(opts?. autoHideMs ??  3000);
         setOpen(true);
     }, []);
+
+    // Listen to global events (optional - for manual triggers)
+    React.useEffect(() => {
+        const handleUnauthorized = () => {
+            notify("Phiên đăng nhập hết hạn.  Đang chuyển về trang đăng nhập.. .", "warning", { autoHideMs: 2000 });
+        };
+
+        window.addEventListener("unauthorized", handleUnauthorized);
+        return () => window.removeEventListener("unauthorized", handleUnauthorized);
+    }, [notify]);
 
     return (
         <NotificationContext.Provider value={{ notify }}>

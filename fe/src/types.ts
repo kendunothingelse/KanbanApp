@@ -94,3 +94,4 @@ export interface BurndownResponse {
     daysAheadOrBehind: number | null;   // Số ngày sớm (+) hoặc trễ (-)
     projectHealth: 'ON_TRACK' | 'AT_RISK' | 'DELAYED'; // Trạng thái dự án
 }
+

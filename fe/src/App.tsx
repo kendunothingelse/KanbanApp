@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import WorkspaceDashboard from "./pages/WorkspaceDashboard";
 import { NotificationProvider } from "./components/NotificationProvider";
+import GuidePage from "./pages/GuidePage";
 
 const theme = createTheme({
     palette: {
@@ -38,6 +39,7 @@ const App = () => (
                         <Route path="/register" element={<RegisterPage />} />
                         <Route path="/workspaces" element={<ProtectedRoute><WorkspaceDashboard /></ProtectedRoute>} />
                         <Route path="/boards/:boardId" element={<ProtectedRoute><BoardPage /></ProtectedRoute>} />
+                        <Route path="/guide" element={<ProtectedRoute><GuidePage /></ProtectedRoute>} /> {/* Thêm dòng này */}
                         <Route path="*" element={<Navigate to="/workspaces" replace />} />
                     </Routes>
                 </BrowserRouter>

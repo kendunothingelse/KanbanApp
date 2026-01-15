@@ -7,15 +7,16 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card as CardType } from "../../types";
 import { palette, priorityColors } from "../../theme/colors";
 
+// FIX: Thêm projectDeadline vào interface Props
 type Props = {
     card: CardType;
-    projectDeadline?: string | null;
+    projectDeadline: string | null; // Đã thêm
     onEdit: (card: CardType) => void;
     onDelete: (id: number) => void;
     dragging?: boolean;
 };
 
-const CardItem: React.FC<Props> = ({ card, onEdit, onDelete, dragging }) => {
+const CardItem: React.FC<Props> = ({ card, projectDeadline, onEdit, onDelete, dragging }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: card.id,
         data: { type: "card", status: card.status },
@@ -24,9 +25,10 @@ const CardItem: React.FC<Props> = ({ card, onEdit, onDelete, dragging }) => {
 
     const style: React.CSSProperties = {
         transform: CSS.Transform.toString(transform),
-        transition: transition || "transform 150ms ease, box-shadow 150ms ease, background 150ms ease",
-        boxShadow: dragging || isDragging ? "0px 6px 16px rgba(0,0,0,0.12)" : "0px 1px 4px rgba(0,0,0,0.08)",
-        opacity: dragging || isDragging ? 0.9 : 1,
+        transition: transition || "transform 150ms ease, box-shadow 150ms ease",
+        boxShadow: dragging || isDragging ? "0px 8px 20px rgba(0,0,0,0.15)" : "0px 1px 3px rgba(0,0,0,0.1)",
+        opacity: dragging || isDragging ? 0.8 : 1,
+        borderColor: palette.border.light,
     };
 
     const getDeadlineStatus = () => {
@@ -34,11 +36,20 @@ const CardItem: React.FC<Props> = ({ card, onEdit, onDelete, dragging }) => {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const due = new Date(card.dueDate); due.setHours(0, 0, 0, 0);
         const diff = Math.floor((due.getTime() - today.getTime()) / 86400000);
+
         if (diff < 0) return { label: "Quá hạn", color: palette.accent.main };
-        if (diff <= 2) return { label: "Sắp hết hạn", color: palette.warning.main };
+        if (diff <= 2) return { label: "Sắp đến hạn", color: "#F0A500" }; // Cam cảnh báo
         return null;
     };
     const deadlineStatus = getDeadlineStatus();
+
+    const handleDelete = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        // Safety Check: Xác nhận xóa
+        if (window.confirm(`Bạn có chắc muốn xóa thẻ "${card.title}" không? Hành động này không thể hoàn tác.`)) {
+            onDelete(card.id);
+        }
+    };
 
     return (
         <Paper
@@ -49,77 +60,77 @@ const CardItem: React.FC<Props> = ({ card, onEdit, onDelete, dragging }) => {
                 p: 1.5,
                 bgcolor: "background.paper",
                 borderLeft: card.priority ? `4px solid ${priorityColors[card.priority]}` : undefined,
-                "&:hover": { boxShadow: "0px 4px 12px rgba(0,0,0,0.12)" },
+                "&:hover": { boxShadow: "0px 4px 12px rgba(0,0,0,0.1)" },
+                cursor: "grab",
             }}
             {...attributes}
             {...listeners}
         >
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-                <Typography variant="subtitle1" fontWeight={700} sx={{ flex: 1, wordBreak: "break-word", color: palette.text.primary }}>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ flex: 1, wordBreak: "break-word", color: palette.text.primary, lineHeight: 1.3 }}>
                     {card.title}
                 </Typography>
-                {card.priority && (
+                {card.priority && card.priority !== "LOW" && (
                     <Chip
                         size="small"
                         label={card.priority}
                         sx={{
                             bgcolor: priorityColors[card.priority],
-                            color: card.priority === "HIGH" ? "#fff" : palette.text.primary,
-                            fontSize: 10,
-                            height: 20,
+                            color: "#fff",
+                            fontSize: 9,
+                            height: 18,
                             flexShrink: 0,
+                            fontWeight: 600
                         }}
                     />
                 )}
             </Stack>
 
+            {/* Chỉ hiện tối đa 2 dòng mô tả */}
             {card.description && (
-                <Typography variant="body2" color="text.secondary" mt={0.5}>
+                <Typography variant="body2" color="text.secondary" mt={0.5} sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 12 }}>
                     {card.description}
                 </Typography>
             )}
 
-            <Stack spacing={0.5} mt={1} fontSize={12} color="text.secondary">
+            {/* Icons thay vì text dài dòng */}
+            <Stack direction="row" spacing={1.5} mt={1.5} alignItems="center">
                 {card.dueDate && (
-                    <Typography variant="body2" color={deadlineStatus ? deadlineStatus.color : "text.secondary"}>
-                        <EventIcon fontSize="small" sx={{ mr: 0.5, verticalAlign: "middle" }} />
-                        Hạn: {card.dueDate} {deadlineStatus ? `(${deadlineStatus.label})` : ""}
-                    </Typography>
+                    <Tooltip title={`Hạn chót: ${card.dueDate} ${deadlineStatus ? `(${deadlineStatus.label})` : ""}`}>
+                        <Box display="flex" alignItems="center" color={deadlineStatus ? deadlineStatus.color : "text.secondary"}>
+                            <EventIcon sx={{ fontSize: 16, mr: 0.5 }} />
+                            <Typography variant="caption" fontWeight={deadlineStatus ? 700 : 400}>
+                                {card.dueDate.slice(5)} {/* Chỉ hiện MM-DD cho gọn */}
+                            </Typography>
+                        </Box>
+                    </Tooltip>
                 )}
-                {card.createdAt && (
-                    <Typography variant="body2">
-                        <AccessTimeIcon fontSize="small" sx={{ mr: 0.5, verticalAlign: "middle" }} />
-                        Tạo: {card.createdAt.slice(0, 10)}
-                    </Typography>
-                )}
-                {card.estimateHours != null && (
-                    <Typography variant="body2">
-                        <AccessTimeIcon fontSize="small" sx={{ mr: 0.5, verticalAlign: "middle" }} />
-                        Ước tính: {card.estimateHours}h
-                    </Typography>
-                )}
-                {card.actualHours != null && (
-                    <Typography variant="body2">
-                        <AccessTimeIcon fontSize="small" sx={{ mr: 0.5, verticalAlign: "middle" }} />
-                        Thực tế: {card.actualHours}h
-                    </Typography>
+
+                {(card.estimateHours || card.actualHours) && (
+                    <Tooltip title={`Ước tính: ${card.estimateHours || 0}h | Thực tế: ${card.actualHours || 0}h`}>
+                        <Box display="flex" alignItems="center" color="text.secondary">
+                            <AccessTimeIcon sx={{ fontSize: 16, mr: 0.5 }} />
+                            <Typography variant="caption">
+                                {card.actualHours || 0}/{card.estimateHours || 0}h
+                            </Typography>
+                        </Box>
+                    </Tooltip>
                 )}
             </Stack>
 
-            <Box mt={1.5} display="flex" gap={1}>
+            {/* Nút thao tác ẩn, hiện khi hover hoặc bấm vào card (tùy chỉnh thêm nếu cần), ở đây giữ nguyên nhưng làm gọn */}
+            <Box mt={1.5} display="flex" justifyContent="flex-end" gap={1}>
                 <Button
                     size="small"
-                    variant="contained"
                     onClick={(e) => { e.stopPropagation(); onEdit(card); }}
-                    sx={{ bgcolor: palette.secondary.main, "&:hover": { bgcolor: palette.secondary.dark } }}
+                    sx={{ minWidth: 0, p: "2px 8px", fontSize: 11, color: palette.secondary.main }}
                 >
                     Sửa
                 </Button>
                 <Button
                     size="small"
-                    variant="outlined"
-                    onClick={(e) => { e.stopPropagation(); onDelete(card.id); }}
-                    sx={{ borderColor: palette.accent.main, color: palette.accent.main, "&:hover": { borderColor: palette.accent.dark, bgcolor: `${palette.accent.main}11` } }}
+                    onClick={handleDelete}
+                    sx={{ minWidth: 0, p: "2px 8px", fontSize: 11, color: palette.accent.main }}
                 >
                     Xóa
                 </Button>

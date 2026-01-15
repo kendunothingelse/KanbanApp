@@ -1,146 +1,226 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { Box, Grid, Card, Stack, Typography, Chip } from "@mui/material";
+import { Box, Grid, Card, Stack, Typography, Button, Collapse } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import SpeedIcon from "@mui/icons-material/Speed";
 import EventIcon from "@mui/icons-material/Event";
-import WarningIcon from "@mui/icons-material/Warning";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import { Board, Card as CardType, CardHistory, BurndownPoint, WeeklyVelocity } from "../../types";
+import WarningIcon from "@mui/icons-material/Warning";
+import { Board, BurndownPoint, WeeklyVelocity } from "../../types";
 import { getProjectDeadlineStatus, getTaskProgressStatus } from "../../utils/statusHelpers";
 import StatCard from "./StatCard";
 import BurndownChartPanel from "./BurndownChartPanel";
 import VelocityPanel from "./VelocityPanel";
 import CycleTimePanel from "./CycleTimePanel";
-import ForecastGlossary from "./ForecastGlossary";
 import { palette, healthColors } from "../../theme/colors";
-
-interface Forecast {
-    avgCycleDays: number;
-    avgActualHours: number;
-    totalCards: number;
-    doneCards: number;
-    remainingCards: number;
-    remainingTimeDays: number;
-    remainingEffortHours: number;
-    estimatedEndDate: string | null;
-}
-
-type VelocityMonth = { label: string; weeks: WeeklyVelocity[]; sortKey: number };
+import HelpTooltip from "../common/HelpTooltip";
+import ForecastAnalysis from "./ForecastAnalysis";
+import { copy } from "./ForecastCopy";
 
 interface Props {
     board: Board | null;
-    cards: CardType[];
-    histories: CardHistory[];
+    cards: any[];
+    histories: any[];
     metrics: { avgCycle: number; doneCount: number; total: number };
     burndownData: BurndownPoint[];
-    velocityMonths: VelocityMonth[];
+    velocityMonths: { label: string; weeks: WeeklyVelocity[]; sortKey: number }[];
     averageVelocity: number;
     burndownLoading: boolean;
     burndownError: string | null;
-    forecast: Forecast | null;
+    forecast: any;
     estimatedEndDate?: string | null;
     projectHealth?: string | null;
     remainingPoints?: number;
+    daysAheadOrBehind?: number | null;
 }
 
 const ForecastTab: React.FC<Props> = ({
-                                          board,
-                                          cards,
-                                          histories,
-                                          metrics,
-                                          burndownData,
-                                          velocityMonths,
-                                          averageVelocity,
-                                          burndownLoading,
-                                          burndownError,
-                                          forecast,
-                                          estimatedEndDate,
-                                          projectHealth,
-                                          remainingPoints,
+                                          board, cards, histories, metrics, burndownData, velocityMonths, averageVelocity,
+                                          burndownLoading, burndownError, forecast, estimatedEndDate, projectHealth,
+                                          remainingPoints, daysAheadOrBehind,
                                       }) => {
     const [velocityMonthIndex, setVelocityMonthIndex] = useState(0);
+    const [showCharts, setShowCharts] = useState(false);
+
     useEffect(() => setVelocityMonthIndex(0), [velocityMonths]);
 
-    const currentVelocityWeeks = useMemo(() => velocityMonths[velocityMonthIndex]?.weeks ?? [], [velocityMonths, velocityMonthIndex]);
-    const currentVelocityMonthLabel = useMemo(() => velocityMonths[velocityMonthIndex]?.label ?? "", [velocityMonths, velocityMonthIndex]);
+    const currentVelocityWeeks = useMemo(
+        () => velocityMonths[velocityMonthIndex]?.weeks ?? [],
+        [velocityMonths, velocityMonthIndex]
+    );
+    const currentVelocityMonthLabel = useMemo(
+        () => velocityMonths[velocityMonthIndex]?.label ?? "",
+        [velocityMonths, velocityMonthIndex]
+    );
+    const projectDeadlineStatus = useMemo(
+        () => getProjectDeadlineStatus(board?.endDate),
+        [board?.endDate]
+    );
 
-    const projectDeadlineStatus = useMemo(() => getProjectDeadlineStatus(board?.endDate), [board?.endDate]);
-    const taskStatus = useMemo(() => getTaskProgressStatus(metrics.total, metrics.doneCount, board?.createdAt, board?.endDate), [metrics.total, metrics.doneCount, board?.createdAt, board?.endDate]);
+    const finishDateStr = estimatedEndDate
+        ? new Date(estimatedEndDate).toLocaleDateString("vi-VN", {
+            weekday: "long", year: "numeric", month: "long", day: "numeric",
+        })
+        : "Chưa đủ dữ liệu";
 
-    const healthColor = projectHealth === "DELAYED" ? healthColors.DELAYED : projectHealth === "AT_RISK" ? healthColors.AT_RISK : healthColors.ON_TRACK;
     const healthLabel =
-        projectHealth === "DELAYED" ? "Đang CHẬM so với kế hoạch" : projectHealth === "AT_RISK" ? "Có nguy cơ chậm tiến độ" : "Khả năng cao là KỊP";
-
-    const finishDate = estimatedEndDate || forecast?.estimatedEndDate || null;
-    const finishText = finishDate ? `Tại tốc độ hiện tại, bạn sẽ hoàn thành vào ngày ${finishDate}.` : "Chưa đủ dữ liệu để dự đoán ngày hoàn thành.";
-    const isLate = finishDate && board?.endDate && finishDate > board.endDate;
+        projectHealth === "DELAYED"
+            ? "Cần chú ý gấp!"
+            : projectHealth === "AT_RISK"
+                ? "Có rủi ro trễ hạn"
+                : "Mọi thứ ổn định";
+    const healthColor =
+        projectHealth === "DELAYED"
+            ? healthColors.DELAYED
+            : projectHealth === "AT_RISK"
+                ? healthColors.AT_RISK
+                : healthColors.ON_TRACK;
 
     return (
-        <Box>
-            {/* Health Check */}
-            <Card sx={{ p: 3, mb: 3, bgcolor: `${healthColor}0F`, border: `1px solid ${healthColor}`, boxShadow: "none" }}>
-                <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="center" justifyContent="space-between">
-                    <Stack direction="row" spacing={2} alignItems="center">
-                        {projectHealth === "DELAYED" ? <WarningIcon sx={{ color: healthColor }} /> : <CheckCircleIcon sx={{ color: healthColor }} />}
-                        <Box>
-                            <Typography variant="h6" fontWeight={700} color={palette.text.primary}>Dự án có kịp Deadline không?</Typography>
-                            <Typography color={palette.text.primary} fontWeight={600}>{healthLabel}</Typography>
-                            <Typography variant="body2" color={palette.text.secondary}>{projectDeadlineStatus.subtitle}</Typography>
-                        </Box>
-                    </Stack>
-                    <Chip label={finishDate ? `Ước tính hoàn thành: ${finishDate}` : "Chưa có ước tính"} sx={{ bgcolor: "#FFF", border: `1px solid ${palette.border.main}`, color: palette.text.primary }} />
+        <Box id="forecast-tab-container">
+            {/* Tổng quan + giải thích */}
+            <Card sx={{ p: 3, mb: 3, borderLeft: `6px solid ${healthColor}` }}>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={3} alignItems="center">
+                    {projectHealth === "DELAYED" ? (
+                        <WarningIcon sx={{ color: healthColor, fontSize: 48 }} />
+                    ) : (
+                        <CheckCircleIcon sx={{ color: healthColor, fontSize: 48 }} />
+                    )}
+                    <Box flexGrow={1}>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                            <Typography variant="h5" fontWeight={700} color="text.primary">
+                                {copy.overviewTitle}
+                            </Typography>
+                            <HelpTooltip title={copy.forecastHelp} />
+                        </Stack>
+                        <Typography variant="body1" color="text.secondary" mb={1}>
+                            {copy.overviewDesc}
+                        </Typography>
+                        <Typography variant="h6" color={palette.primary.main} fontWeight={700}>
+                            {healthLabel}: {finishDateStr}
+                        </Typography>
+                    </Box>
                 </Stack>
             </Card>
 
-            {/* Progress */}
-            <Card sx={{ p: 3, mb: 3, bgcolor: isLate ? `${palette.warning.light}33` : palette.background.paper, border: `1px solid ${isLate ? palette.warning.main : palette.border.light}`, boxShadow: "none" }}>
-                <Typography variant="h6" fontWeight={700} color={palette.text.primary} gutterBottom>Tiến độ tổng thể</Typography>
-                <Typography variant="body1" color={palette.text.primary} mb={1}>{finishText}</Typography>
-                <Typography variant="body2" color={palette.text.secondary} mb={2}>
-                    Công việc còn lại: {remainingPoints ?? 0} điểm | {metrics.doneCount}/{metrics.total} việc đã xong
-                </Typography>
-                <BurndownChartPanel data={burndownData} loading={burndownLoading} error={burndownError} useArea idealLabel="Kế hoạch" actualLabel="Khối lượng còn lại" />
-            </Card>
+            {/* Phân tích gợi ý hành động */}
+            <ForecastAnalysis
+                projectHealth={projectHealth}
+                daysAheadOrBehind={daysAheadOrBehind}
+                averageVelocity={averageVelocity}
+                remainingPoints={remainingPoints || 0}
+            />
 
-            {/* Performance */}
-            <Card sx={{ p: 3, mb: 3, boxShadow: "none", border: `1px solid ${palette.border.light}` }}>
-                <Typography variant="h6" fontWeight={700} color={palette.text.primary} gutterBottom>Năng suất làm việc</Typography>
-                <Grid container spacing={2} mb={2}>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard title="Tốc độ làm việc" loading={burndownLoading} value={`${averageVelocity.toFixed(1)} điểm/tuần`} color={palette.secondary.main} icon={<SpeedIcon />} subtitle="Trung bình mỗi tuần" />
+            {/* KPI chính */}
+            <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                <Typography variant="h6" fontWeight={700}>{copy.kpiHeader}</Typography>
+                <HelpTooltip title={copy.kpiHelp} />
+            </Stack>
+
+            <Grid container spacing={2} mb={3}>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        title="Tốc độ nhóm (Velocity)"
+                        value={averageVelocity.toFixed(1)}
+                        subtitle="điểm / tuần"
+                        color={palette.secondary.main}
+                        icon={<SpeedIcon />}
+                        loading={burndownLoading}
+                    />
+                    <HelpTooltip title="Trung bình mỗi tuần nhóm hoàn thành được bao nhiêu khối lượng công việc." />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        title="Tốc độ xong 1 việc"
+                        value={metrics.avgCycle.toFixed(1)}
+                        subtitle="ngày / việc"
+                        color={palette.primary.main}
+                        icon={<AccessTimeIcon />}
+                    />
+                    <HelpTooltip title="Mất bao nhiêu ngày từ lúc tạo việc đến khi hoàn thành." />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        title="Khối lượng còn lại"
+                        value={remainingPoints || 0}
+                        subtitle="điểm công việc"
+                        color={palette.warning.main}
+                        icon={<WarningIcon />}
+                    />
+                    <HelpTooltip title="Tổng khối lượng công việc chưa hoàn thành." />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                    <StatCard
+                        title="Hạn chót (Deadline)"
+                        value={projectDeadlineStatus.label}
+                        subtitle={board?.endDate || "Chưa đặt"}
+                        color={projectDeadlineStatus.color}
+                        icon={<EventIcon />}
+                    />
+                    <HelpTooltip title="So sánh hôm nay với hạn chót dự án." />
+                </Grid>
+            </Grid>
+
+            {/* Biểu đồ chi tiết có thể ẩn/hiện */}
+            <Box textAlign="center" mb={3}>
+                <Button
+                    variant={showCharts ? "outlined" : "contained"}
+                    onClick={() => setShowCharts(!showCharts)}
+                >
+                    {showCharts ? copy.chartsToggleHide : copy.chartsToggleShow}
+                </Button>
+            </Box>
+
+            <Collapse in={showCharts}>
+                <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                    <Typography variant="h6" fontWeight={700}>{copy.chartsHeader}</Typography>
+                    <HelpTooltip title="Nhìn xu hướng làm việc theo thời gian để dự báo chính xác hơn." />
+                </Stack>
+
+                <Grid container spacing={3}>
+                    <Grid item xs={12}>
+                        <Box position="relative" height={450}>
+                            <BurndownChartPanel
+                                data={burndownData}
+                                loading={burndownLoading}
+                                error={burndownError}
+                                idealLabel="Kế hoạch lý tưởng"
+                                actualLabel="Thực tế còn lại"
+                            />
+                            <Box position="absolute" top={16} right={16}>
+                                <HelpTooltip placement="left" title={copy.burndownHelp} />
+                            </Box>
+                        </Box>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard title="Thời gian hoàn thành 1 việc" loading={!forecast} value={`${metrics.avgCycle.toFixed(1)} ngày`} color={palette.primary.main} icon={<AccessTimeIcon />} subtitle="Từ lúc bắt đầu tới lúc xong" />
+
+                    <Grid item xs={12} md={6}>
+                        <Box position="relative" height="100%">
+                            <VelocityPanel
+                                loading={burndownLoading}
+                                error={burndownError}
+                                weeks={currentVelocityWeeks}
+                                monthLabel={currentVelocityMonthLabel}
+                                onPrev={() => setVelocityMonthIndex((v) => Math.min(velocityMonths.length - 1, v + 1))}
+                                onNext={() => setVelocityMonthIndex((v) => Math.max(0, v - 1))}
+                                disablePrev={velocityMonthIndex >= velocityMonths.length - 1}
+                                disableNext={velocityMonthIndex <= 0}
+                                averageVelocity={averageVelocity}
+                            />
+                            <Box position="absolute" top={16} right={16}>
+                                <HelpTooltip title={copy.velocityHelp} />
+                            </Box>
+                        </Box>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard title="Trạng thái công việc" loading={burndownLoading} value={taskStatus.label} color={taskStatus.color} icon={taskStatus.icon} subtitle={taskStatus.subtitle} />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <StatCard title="Hạn dự án" loading={burndownLoading} value={projectDeadlineStatus.label} color={projectDeadlineStatus.color} icon={<EventIcon />} subtitle={projectDeadlineStatus.subtitle} />
+
+                    <Grid item xs={12} md={6}>
+                        <Box position="relative" height={450}>
+                            <CycleTimePanel cards={cards} histories={histories} avgCycle={metrics.avgCycle} />
+                            <Box position="absolute" top={16} right={16}>
+                                <HelpTooltip placement="left" title={copy.cycleHelp} />
+                            </Box>
+                        </Box>
                     </Grid>
                 </Grid>
-
-                <Grid container spacing={2}>
-                    <Grid item xs={12} md={8}>
-                        <VelocityPanel
-                            loading={burndownLoading}
-                            error={burndownError}
-                            weeks={currentVelocityWeeks}
-                            monthLabel={currentVelocityMonthLabel}
-                            averageVelocity={averageVelocity}
-                            onPrev={() => setVelocityMonthIndex((v) => Math.min(velocityMonths.length - 1, v + 1))}
-                            onNext={() => setVelocityMonthIndex((v) => Math.max(0, v - 1))}
-                            disablePrev={velocityMonthIndex >= velocityMonths.length - 1}
-                            disableNext={velocityMonthIndex <= 0}
-                        />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                        <CycleTimePanel cards={cards} histories={histories} avgCycle={metrics.avgCycle} />
-                    </Grid>
-                </Grid>
-            </Card>
-
-            <ForecastGlossary />
+            </Collapse>
         </Box>
     );
 };
