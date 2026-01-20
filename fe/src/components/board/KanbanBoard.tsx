@@ -8,6 +8,11 @@ import DroppableColumn from "./DroppableColumn";
 import { palette } from "../../theme/colors";
 
 const STATUSES: Status[] = ["TODO", "IN_PROGRESS", "DONE"];
+const STATUS_LABELS: Record<Status, string> = {
+    TODO: "Chưa làm",
+    IN_PROGRESS: "Đang làm",
+    DONE: "Hoàn thành",
+};
 
 interface Props {
     cardsByStatus: Record<Status, CardType[]>;
@@ -33,7 +38,13 @@ const KanbanBoard: React.FC<Props> = ({
                 {STATUSES.map((status) => {
                     const colCards = cardsByStatus[status] || [];
                     return (
-                        <DroppableColumn key={status} status={status} title={status} wipLimit={wipLimit} currentCount={status === "IN_PROGRESS" ? colCards.length : undefined}>
+                        <DroppableColumn
+                            key={status}
+                            status={status}
+                            title={STATUS_LABELS[status]}
+                            wipLimit={wipLimit}
+                            currentCount={status === "IN_PROGRESS" ? colCards.length : undefined}
+                        >
                             <Button
                                 size="small"
                                 variant="outlined"
@@ -52,7 +63,6 @@ const KanbanBoard: React.FC<Props> = ({
                             <SortableContext items={colCards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                                 <Stack spacing={1.5}>
                                     {colCards.map((card) => (
-                                        // FIX: Đã truyền projectDeadline đúng cách
                                         <CardItem
                                             key={card.id}
                                             card={card}

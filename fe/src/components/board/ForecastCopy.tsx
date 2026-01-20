@@ -1,14 +1,14 @@
-// Helper chứa text giải thích, dùng lại nhiều nơi
+// Helper chứa text giải thích, dùng lại nhiều nơi (đã đơn giản hóa cho người không chuyên)
 export const copy = {
-    overviewTitle: "Hệ thống Dự báo tiến độ",
-    overviewDesc: "Cho bạn biết khi nào dự án sẽ xong dựa trên tốc độ làm việc thực tế.",
-    kpiHeader: "Số liệu quan trọng",
-    chartsHeader: "Biểu đồ chi tiết",
-    chartsToggleShow: "Xem biểu đồ phân tích chuyên sâu",
-    chartsToggleHide: "Ẩn biểu đồ chi tiết",
-    kpiHelp: "Các chỉ số cốt lõi giúp bạn đánh giá hiệu suất hiện tại.",
-    forecastHelp: "Dự đoán ngày hoàn thành dự án dựa trên dữ liệu thực tế đã ghi nhận.",
-    burndownHelp: "So sánh khối lượng công việc còn lại (vùng màu) với kế hoạch lý tưởng (đường nét đứt).",
-    velocityHelp: "Cột càng cao nghĩa là tuần đó làm được càng nhiều. Đường ngang là tốc độ trung bình.",
-    cycleHelp: "Mỗi cột là một việc đã xong. Cột càng cao nghĩa là việc đó tốn càng nhiều thời gian.",
+    overviewTitle: "Hệ thống dự báo tiến độ (Forecast)",
+    overviewDesc: "Giúp bạn biết khi nào dự án sẽ xong dựa trên tốc độ làm việc thực tế.",
+    kpiHeader: "Chỉ số chính (dễ hiểu)",
+    chartsHeader: "Biểu đồ phân tích chi tiết",
+    chartsToggleShow: "Xem biểu đồ phân tích",
+    chartsToggleHide: "Ẩn biểu đồ",
+    kpiHelp: "Các chỉ số cốt lõi để bạn nắm nhanh tiến độ mà không cần kiến thức kỹ thuật.",
+    forecastHelp: "Tự động ước tính ngày hoàn thành dự án từ dữ liệu thực tế (không cần tính tay).",
+    burndownHelp: "Burndown: vùng màu là khối lượng còn lại, đường nét đứt là tiến độ lý tưởng.",
+    velocityHelp: "Velocity: tốc độ trung bình mỗi tuần (số điểm/giờ công việc hoàn thành).",
+    cycleHelp: "Cycle Time: số ngày để hoàn thành 1 việc từ lúc tạo đến lúc xong.",
 };

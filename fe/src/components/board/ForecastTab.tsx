@@ -119,54 +119,53 @@ const ForecastTab: React.FC<Props> = ({
             <Grid container spacing={2} mb={3}>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard
-                        title="Tốc độ nhóm (Velocity)"
+                        title="Tốc độ trung bình/tuần (Velocity)"
                         value={averageVelocity.toFixed(1)}
-                        subtitle="điểm / tuần"
+                        subtitle="điểm hoặc giờ / tuần"
                         color={palette.secondary.main}
                         icon={<SpeedIcon />}
                         loading={burndownLoading}
                     />
-                    <HelpTooltip title="Trung bình mỗi tuần nhóm hoàn thành được bao nhiêu khối lượng công việc." />
+                    <HelpTooltip title="Velocity: tốc độ trung bình nhóm hoàn thành công việc mỗi tuần." />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard
-                        title="Tốc độ xong 1 việc"
+                        title="Số ngày để xong 1 việc (Cycle Time)"
                         value={metrics.avgCycle.toFixed(1)}
                         subtitle="ngày / việc"
                         color={palette.primary.main}
                         icon={<AccessTimeIcon />}
                     />
-                    <HelpTooltip title="Mất bao nhiêu ngày từ lúc tạo việc đến khi hoàn thành." />
+                    <HelpTooltip title="Cycle Time: số ngày trung bình từ lúc tạo đến khi hoàn thành một việc." />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard
                         title="Khối lượng còn lại"
                         value={remainingPoints || 0}
-                        subtitle="điểm công việc"
+                        subtitle="điểm/giờ công việc chưa hoàn thành"
                         color={palette.warning.main}
                         icon={<WarningIcon />}
                     />
-                    <HelpTooltip title="Tổng khối lượng công việc chưa hoàn thành." />
+                    <HelpTooltip title="Tổng khối lượng công việc chưa xong (tính theo điểm hoặc giờ ước tính)." />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard
-                        title="Hạn chót (Deadline)"
+                        title="Hạn chót dự án (Deadline)"
                         value={projectDeadlineStatus.label}
                         subtitle={board?.endDate || "Chưa đặt"}
                         color={projectDeadlineStatus.color}
                         icon={<EventIcon />}
                     />
-                    <HelpTooltip title="So sánh hôm nay với hạn chót dự án." />
+                    <HelpTooltip title="So sánh hôm nay với ngày deadline của dự án để biết còn kịp hay không." />
                 </Grid>
             </Grid>
-
             {/* Biểu đồ chi tiết có thể ẩn/hiện */}
             <Box textAlign="center" mb={3}>
                 <Button
                     variant={showCharts ? "outlined" : "contained"}
                     onClick={() => setShowCharts(!showCharts)}
                 >
-                    {showCharts ? copy.chartsToggleHide : copy.chartsToggleShow}
+                    {showCharts ? "Ẩn biểu đồ phân tích" : "Xem biểu đồ phân tích"}
                 </Button>
             </Box>
 

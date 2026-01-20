@@ -26,7 +26,7 @@ interface Props {
 const BurndownChartPanel: React.FC<Props> = ({ data, loading, error, useArea = true, idealLabel = "Ideal", actualLabel = "Actual" }) => (
     <Card sx={{ p: 3, height: 450, display: "flex", flexDirection: "column", border: `1px solid ${palette.border.light}`, boxShadow: "none" }}>
         <Typography variant="subtitle1" fontWeight={700} mb={2} color="text.primary">
-            Biểu đồ Burndown công việc
+            Biểu đồ Burn down (khối lượng còn lại vs. kế hoạch)
         </Typography>
 
         <Box flexGrow={1} minHeight={0}>

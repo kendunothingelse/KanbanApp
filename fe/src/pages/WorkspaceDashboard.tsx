@@ -218,7 +218,7 @@ const WorkspaceDashboard: React.FC = () => {
                    mb={3}>
                 <Stack direction="row" spacing={1.5} alignItems="center">
                     <Avatar sx={{bgcolor: mainColor}}>{user?.username?.[0]?.toUpperCase()}</Avatar>
-                    <Typography variant="h6">Bảng điều khiển</Typography>
+                    <Typography variant="h6">Không gian làm việc chính</Typography>
                     <Tooltip title="Xem hướng dẫn sử dụng">
                         <IconButton onClick={() => nav("/guide")} color="primary">
                             <HelpOutlineIcon/>
