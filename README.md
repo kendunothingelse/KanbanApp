@@ -2,6 +2,11 @@
 
 This project is a web application for managing tasks using a visual Kanban board. It includes features like drag-and-drop for tasks and columns, task detail editing, member assignment, due dates, and labels.
 
+## Repository Layout & Code Versions
+
+*   `fe/` (frontend): React **19.2.0** with TypeScript **4.9.x** via `react-scripts` 5.0.1. UI is built with Chakra UI **2.10.x**, drag-and-drop uses `@dnd-kit/sortable` **10.0.0**, and routing is handled by React Router **7.9.x**.
+*   `be/` (backend): Spring Boot **3.5.7** project targeting Java **23** (Gradle toolchain). It includes starters for Web, Security, Validation, Data JPA, plus JWT (`jjwt` **0.13.0**) and MySQL connector for persistence.
+
 ## Getting Started
 
 To get a local copy up and running, follow these simple steps.
