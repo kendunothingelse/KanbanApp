@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {
     Avatar,
     Box,
@@ -13,17 +13,17 @@ import {
     Paper,
     IconButton
 } from "@mui/material";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline"; // Icon xóa
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
-import EditIcon from "@mui/icons-material/Edit"; // Import icon Edit
-import DeleteIcon from "@mui/icons-material/Delete"; // Import icon Delete
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import {useAuth} from "../auth/AuthContext";
 import api from "../api";
 import {Board, Workspace, BoardProgress} from "../types";
 import CreateBoardModal from "../components/CreateBoardModal";
 import {useNavigate} from "react-router-dom";
 import CreateWorkspaceButton from "../components/CreateWorkspaceButton";
-import ConfirmDialog from "../components/common/ConfirmDialog"; // Import Dialog mới
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import {getAvatarColor, getAvatarColorDifferent} from "../utils/avatarColor";
 import {useNotification} from "../components/NotificationProvider";
 import {palette} from "../theme/colors";
@@ -45,14 +45,11 @@ const WorkspaceDashboard: React.FC = () => {
     const [wsSearch, setWsSearch] = useState("");
     const nav = useNavigate();
     const {notify} = useNotification();
-    // State cho chức năng sửa workspace
+
     const [editWsModalOpen, setEditWsModalOpen] = useState(false);
     const [editingWs, setEditingWs] = useState<Workspace | null>(null);
-
-    // State cho Modal tạo Board
     const [boardModalOpen, setBoardModalOpen] = useState(false);
 
-    // State cho Dialog xác nhận xóa
     const [deleteDialog, setDeleteDialog] = useState<{
         open: boolean;
         type: "workspace" | "board";
@@ -65,18 +62,11 @@ const WorkspaceDashboard: React.FC = () => {
         try {
             const res = await api.get("/boards/me");
             const bs: BoardWithMembers[] = res.data;
-            // Fetch thêm info phụ (members, progress)
             const withInfo = await Promise.all(
                 bs.map(async (b) => {
                     let members: any[] = [], progress: BoardProgress = {total: 0, done: 0};
-                    try {
-                        members = (await api.get(`/boards/${b.id}/members`)).data;
-                    } catch {
-                    }
-                    try {
-                        progress = (await api.get(`/boards/${b.id}/progress`)).data;
-                    } catch {
-                    }
+                    try { members = (await api.get(`/boards/${b.id}/members`)).data; } catch {}
+                    try { progress = (await api.get(`/boards/${b.id}/progress`)).data; } catch {}
                     return {...b, members, progress};
                 })
             );
@@ -102,28 +92,24 @@ const WorkspaceDashboard: React.FC = () => {
         loadBoards();
     }, []);
 
-    // Logic mở Dialog xác nhận xóa
     const confirmDelete = (type: "workspace" | "board", id: number, name: string) => {
         setDeleteDialog({open: true, type, id, name, loading: false});
     };
 
-    // Logic thực hiện xóa khi bấm nút "Xóa" trên Dialog
     const handleDeleteExecute = async () => {
         const {type, id} = deleteDialog;
         setDeleteDialog(prev => ({...prev, loading: true}));
-
         try {
             if (type === "workspace") {
                 await api.delete(`/workspaces/${id}`);
                 notify(`Đã xóa ${labels.workspace}`, "success");
-                await loadOwnedWorkspaces();
-                // Nếu đang chọn ws vừa xóa thì về "Tất cả"
                 if (selectedWs === id) setSelectedWs(MAIN_WS.id);
+                await loadOwnedWorkspaces();
             } else {
                 await api.delete(`/boards/${id}`);
                 notify(`Đã xóa ${labels.board}`, "success");
             }
-            await loadBoards(); // Reload boards sau khi xóa bất cứ cái gì
+            await loadBoards();
             setDeleteDialog(prev => ({...prev, open: false}));
         } catch (e: any) {
             notify(e?.response?.data || e.message || "Xóa thất bại", "error");
@@ -136,7 +122,13 @@ const WorkspaceDashboard: React.FC = () => {
     const noWorkspaceOwned = workspaces.filter((w) => w.id !== MAIN_WS.id).length === 0;
     const mainColor = getAvatarColor(user?.username);
 
-    // ... (Giữ nguyên các hàm renderMembers, statusChip, renderProgressBar) ...
+    // Danh sách workspace sau khi áp dụng tìm kiếm
+    const filteredWorkspaces = useMemo(() => {
+        const keyword = wsSearch.trim().toLowerCase();
+        if (!keyword) return workspaces;
+        return workspaces.filter(ws => ws.name.toLowerCase().includes(keyword));
+    }, [wsSearch, workspaces]);
+
     const renderMembers = (members?: { id: number; user: { username: string } }[]) => {
         if (!members?.length) return null;
         return (
@@ -166,7 +158,6 @@ const WorkspaceDashboard: React.FC = () => {
                                color={progress.done === progress.total ? "success" : "warning"}/>;
     };
 
-    // UI Empty State (Giữ nguyên)
     const emptyState = noWorkspaceOwned && (
         <Paper sx={{
             p: 4,
@@ -187,33 +178,14 @@ const WorkspaceDashboard: React.FC = () => {
         </Paper>
     );
 
-    const deleteWorkspace = async (id: number) => {
-        if (id === MAIN_WS.id) return;
-        // Thêm cảnh báo xác nhận rõ ràng hơn
-        if (!window.confirm(`⚠️ CẢNH BÁO:\n\nXóa Workspace sẽ xóa TẤT CẢ các dự án bên trong nó.\n\nBạn có chắc chắn muốn xóa không?`)) return;
-
-        try {
-            await api.delete(`/workspaces/${id}`);
-            notify("Đã xóa khu vực làm việc", "success");
-
-            // Nếu đang chọn ws vừa bị xóa, quay về "Tất cả"
-            if (selectedWs === id) setSelectedWs(MAIN_WS.id);
-
-            await loadOwnedWorkspaces();
-            await loadBoards();
-        }
-        catch (e: any) { notify(e?.response?.data || e.message || "Xóa thất bại", "error"); }
-    };
-
-    // Hàm mở modal sửa
     const openEditWsModal = (ws: Workspace, e: React.MouseEvent) => {
-        e.stopPropagation(); // Ngăn chặn sự kiện click lan ra button cha (chọn workspace)
+        e.stopPropagation();
         setEditingWs(ws);
         setEditWsModalOpen(true);
     };
+
     return (
         <Box p={3}>
-            {/* Header */}
             <Stack direction={{xs: "column", md: "row"}} spacing={2} alignItems="center" justifyContent="space-between"
                    mb={3}>
                 <Stack direction="row" spacing={1.5} alignItems="center">
@@ -240,10 +212,10 @@ const WorkspaceDashboard: React.FC = () => {
 
             {emptyState}
 
-            {/* Danh sách Workspace (Tabs) */}
+            {/* Danh sách Workspace (Tabs) với filter theo từ khóa */}
             <Box mb={3} overflow="auto">
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    {workspaces.map((ws) => (
+                    {filteredWorkspaces.map((ws) => (
                         <Stack
                             key={ws.id}
                             direction="row"
@@ -269,7 +241,6 @@ const WorkspaceDashboard: React.FC = () => {
                                 {ws.name}
                             </Button>
 
-                            {/* Chỉ hiện nút sửa/xóa cho các workspace không phải mặc định (ID 0) */}
                             {ws.id !== MAIN_WS.id && (
                                 <Stack direction="row" pr={0.5}>
                                     <Tooltip title="Sửa tên">
@@ -286,7 +257,7 @@ const WorkspaceDashboard: React.FC = () => {
                                             size="small"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                deleteWorkspace(ws.id);
+                                                confirmDelete("workspace", ws.id, ws.name);
                                             }}
                                             sx={{color: selectedWs === ws.id ? "#fff" : "error.main", p: 0.5}}
                                         >
@@ -354,19 +325,17 @@ const WorkspaceDashboard: React.FC = () => {
                     ))}
             </Grid>
 
-            {/* Modal tạo Board (Cập nhật props) */}
             <CreateBoardModal
                 isOpen={boardModalOpen}
                 onClose={() => setBoardModalOpen(false)}
-                defaultWorkspaceId={selectedWs === MAIN_WS.id ? null : selectedWs} // Nếu đang ở "Tất cả" thì ko chọn sẵn
-                workspaces={workspaces} // Truyền list để chọn
+                defaultWorkspaceId={selectedWs === MAIN_WS.id ? null : selectedWs}
+                workspaces={workspaces}
                 onCreated={async () => {
                     await loadBoards();
                     await loadOwnedWorkspaces();
                 }}
             />
 
-            {/* Dialog xác nhận xóa (Mới) */}
             <ConfirmDialog
                 open={deleteDialog.open}
                 title={`Xóa ${deleteDialog.type === "workspace" ? labels.workspace : labels.board}?`}
@@ -382,7 +351,7 @@ const WorkspaceDashboard: React.FC = () => {
                 workspace={editingWs}
                 onUpdated={async () => {
                     await loadOwnedWorkspaces();
-                    await loadBoards(); // Reload boards vì tên WS có thể thay đổi
+                    await loadBoards();
                 }}
             />
         </Box>
